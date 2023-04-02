@@ -26,7 +26,7 @@ async fn main() -> Result<()> {
 
     load_my_extension(&conn)?;
 
-    conn.query_row("select sqlite_version()", (), |result| {
+    conn.query_row("select vss_version()", (), |result| {
         dbg!(&result);
         Ok(())
     })
