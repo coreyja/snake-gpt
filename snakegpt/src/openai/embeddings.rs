@@ -42,7 +42,11 @@ impl EmbeddingsRequest {
 }
 
 impl Client {
-    pub(crate) async fn embeddings(&self, request: EmbeddingsRequest) -> Result<EmbeddingResponse> {
+    pub(crate) async fn embeddings(
+        &self,
+        request: impl IntoEmbeddingsRequest,
+    ) -> Result<EmbeddingResponse> {
+        let request: EmbeddingsRequest = request.into();
         let response = self
             .0
             .post("https://api.openai.com/v1/embeddings")
@@ -57,5 +61,24 @@ impl Client {
             .into_diagnostic()?;
 
         Ok(response_body)
+    }
+}
+
+pub(crate) trait IntoEmbeddingsRequest {
+    fn into(self) -> EmbeddingsRequest;
+}
+
+impl IntoEmbeddingsRequest for EmbeddingsRequest {
+    fn into(self) -> EmbeddingsRequest {
+        self
+    }
+}
+
+impl<T> IntoEmbeddingsRequest for T
+where
+    T: Into<String>,
+{
+    fn into(self) -> EmbeddingsRequest {
+        EmbeddingsRequest::new(self.into())
     }
 }

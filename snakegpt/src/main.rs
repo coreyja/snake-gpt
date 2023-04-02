@@ -15,9 +15,7 @@ async fn main() -> Result<()> {
 
     let client = config.client()?;
 
-    let request = EmbeddingsRequest::new("Hello world!".to_string());
-
-    let response_body = client.embeddings(request).await?;
+    let response_body = client.embeddings("Hello world!").await?;
 
     dbg!(&response_body);
 
