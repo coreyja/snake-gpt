@@ -8,6 +8,8 @@ edition = "2021"
 [dependencies]
 bstr = { version = "1.4.0", features = ["unicode"] }
 clap = { version = "4.2.1", features = ["derive"] }
+futures = "0.3.28"
+itertools = "0.10.5"
 miette = { version = "5.7.0", features = ["fancy"] }
 reqwest = { version = "0.11.16", features = ["rustls-tls", "json", "gzip"] }
 rusqlite = { version = "0.29.0", features = ["bundled", "load_extension"] }

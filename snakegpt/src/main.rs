@@ -1,8 +1,14 @@
 use clap::Parser;
-use std::{io::Write, path::PathBuf};
+use futures::{stream, StreamExt};
+use itertools::Itertools;
+use std::{
+    io::Write,
+    path::{Path, PathBuf},
+    process::exit,
+};
 
 use bstr::{BStr, ByteSlice};
-use miette::{IntoDiagnostic, Result};
+use miette::{Diagnostic, IntoDiagnostic, Result};
 use openai::Client;
 use rusqlite::{params, Connection, Row};
 
@@ -29,6 +35,8 @@ struct Args {
     path: PathBuf,
 }
 
+const CONCURRENT_REQUESTS: usize = 5;
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
@@ -48,53 +56,119 @@ async fn main() -> Result<()> {
     let config = Config::from_env()?;
     let client = config.client()?;
 
-    for entry in walkdir::WalkDir::new(&args.path) {
-        let entry = entry.into_diagnostic()?;
-        if entry.file_type().is_file() {
+    let pages = walkdir::WalkDir::new(&args.path)
+        .into_iter()
+        .filter(|entry| {
+            let entry = entry.as_ref().unwrap();
             let path = entry.path();
 
-            if path.to_string_lossy().contains("node_modules") {
-                continue;
-            }
+            entry.file_type().is_file()
+                && !path.to_string_lossy().contains("node_modules")
+                && path
+                    .extension()
+                    .map(|ext| ext.to_str() == Some("md"))
+                    .unwrap_or(false)
+        })
+        .collect_vec();
 
-            if let Some(ext) = path.extension() {
-                if ext.to_str() == Some("md") {
-                    println!("About to Process Path: {}", path.display());
+    println!("Found {} pages", pages.len());
 
-                    let display_path = path.display().to_string();
+    let bodies = stream::iter(pages)
+        .map(|page| {
+            let client = &client;
+            let conn = &conn;
+            let page = page.unwrap();
+            let path: PathBuf = page.path().into();
+            async move {
+                println!("About to Process Path: {}", path.display());
 
-                    let page_id = conn.query_row(
-                        "INSERT OR IGNORE INTO pages (path) VALUES (?) returning rowid",
-                        params![display_path],
-                        |row: &Row| -> Result<i64, _> { Ok(row.get(0)?) },
-                    );
+                let display_path = path.display().to_string();
 
-                    let page_id = match page_id {
-                        Ok(id) => id,
-                        Err(e) => conn
-                            .query_row(
-                                "SELECT rowid FROM pages WHERE path = ?",
-                                params![display_path],
-                                |row: &Row| -> Result<i64, _> { Ok(row.get(0)?) },
-                            )
-                            .into_diagnostic()?,
-                    };
+                let page_id = conn.query_row(
+                    "INSERT OR IGNORE INTO pages (path) VALUES (?) returning rowid",
+                    params![display_path],
+                    |row: &Row| -> Result<i64, _> { Ok(row.get(0)?) },
+                );
 
+                let (page_id, parsed_text) = match page_id {
+                    Ok(id) => (id, None),
+                    Err(e) => conn
+                        .query_row(
+                            "SELECT rowid, parsed_text FROM pages WHERE path = ?",
+                            params![display_path],
+                            |row: &Row| -> Result<(i64, Option<String>), _> {
+                                Ok((row.get(0)?, row.get(1)?))
+                            },
+                        )
+                        .into_diagnostic()?,
+                };
+
+                let parsed_text = if let Some(parsed_text) = parsed_text {
+                    parsed_text
+                } else {
                     let content = std::fs::read_to_string(path).into_diagnostic()?;
                     let sentences = client.split_by_sentences(&content).await?;
 
-                    for (i, s) in sentences.into_iter().enumerate() {
-                        print!(".");
-                        std::io::stdout().flush().unwrap();
+                    let parsed_text = sentences.join("\n\n");
 
-                        embed_sentence(&conn, &client, &s, page_id, i).await?;
-                    }
-                    println!();
-                    // todo!();
-                }
+                    conn.execute(
+                        "
+                    UPDATE pages SET parsed_text = ? where rowid = ?",
+                        (&parsed_text, page_id),
+                    )
+                    .into_diagnostic()?;
+
+                    parsed_text
+                };
+
+                Result::<_>::Ok((page_id, parsed_text))
             }
-        }
-    }
+        })
+        .buffer_unordered(CONCURRENT_REQUESTS);
+
+    bodies
+        .for_each(|b| async {
+            match b {
+                Ok((pid, _parsed_text)) => println!("Processed page with id {pid}"),
+                Err(e) => eprintln!("Got an error: {}", e),
+            }
+        })
+        .await;
+
+    let mut st = conn
+        .prepare("SELECT rowid, parsed_text FROM pages")
+        .into_diagnostic()?;
+    let rows = st
+        .query_map(params![], |row| {
+            let id: i64 = row.get(0)?;
+            let parsed_text: String = row.get(1)?;
+            Ok((id, parsed_text))
+        })
+        .into_diagnostic()?;
+
+    stream::iter(rows)
+        .map(|row| {
+            let client = &client;
+            let conn = &conn;
+
+            async move {
+                let (page_id, text) = row.into_diagnostic()?;
+                for (i, sentence) in text.split("\n\n").enumerate() {
+                    // TODO: Skip if already embedded
+                    embed_sentence(&conn, &client, &sentence, page_id, i).await?;
+                }
+
+                Result::<_>::Ok(page_id)
+            }
+        })
+        .buffer_unordered(CONCURRENT_REQUESTS)
+        .for_each(|b| async {
+            match b {
+                Ok(pid) => println!("Embedded page with id {pid}"),
+                Err(e) => eprintln!("Got an error: {}", e),
+            }
+        })
+        .await;
 
     Ok(())
 }
