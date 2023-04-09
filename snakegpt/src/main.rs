@@ -1,3 +1,6 @@
+use clap::Parser;
+use std::path::PathBuf;
+
 use bstr::{BStr, ByteSlice};
 use miette::{IntoDiagnostic, Result};
 use openai::Client;
@@ -14,8 +17,22 @@ mod schema;
 
 static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
+/// SnakeGPT
+///
+/// A chatbot that uses the Battlesnake Docs site and related content
+/// to generate responses to questions about Battlesnake.
+#[derive(Parser, Debug)]
+#[command(author, version, about)]
+struct Args {
+    /// Path to search for Markdown files
+    #[arg(short, long)]
+    path: PathBuf,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
+    let args = Args::parse();
+
     let conn = Connection::open("sample.v0.db").into_diagnostic()?;
 
     load_my_extension(&conn)?;
@@ -31,12 +48,30 @@ async fn main() -> Result<()> {
     let config = Config::from_env()?;
     let client = config.client()?;
 
-    let example = include_str!("../../../battlesnake-community-docs/README.md");
+    for entry in walkdir::WalkDir::new(&args.path) {
+        let entry = entry.into_diagnostic()?;
+        if entry.file_type().is_file() {
+            let path = entry.path();
 
-    let sentences = client.split_by_sentences(example).await?;
+            if path.to_string_lossy().contains("node_modules") {
+                continue;
+            }
 
-    for s in sentences {
-        embed_sentence(&conn, &client, &s).await?;
+            if let Some(ext) = path.extension() {
+                if ext.to_str() == Some("md") {
+                    println!("About to Process Path: {}", path.display());
+
+                    let content = std::fs::read_to_string(path).into_diagnostic()?;
+                    let sentences = client.split_by_sentences(&content).await?;
+
+                    for s in sentences {
+                        print!(".");
+                        embed_sentence(&conn, &client, &s).await?;
+                    }
+                    println!();
+                }
+            }
+        }
     }
 
     Ok(())
