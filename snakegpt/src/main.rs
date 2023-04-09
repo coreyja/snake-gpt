@@ -1,10 +1,10 @@
 use clap::Parser;
-use std::path::PathBuf;
+use std::{io::Write, path::PathBuf};
 
 use bstr::{BStr, ByteSlice};
 use miette::{IntoDiagnostic, Result};
 use openai::Client;
-use rusqlite::Connection;
+use rusqlite::{params, Connection, Row};
 
 use crate::openai::{
     completion::CompletionRequest,
@@ -61,14 +61,36 @@ async fn main() -> Result<()> {
                 if ext.to_str() == Some("md") {
                     println!("About to Process Path: {}", path.display());
 
+                    let display_path = path.display().to_string();
+
+                    let page_id = conn.query_row(
+                        "INSERT OR IGNORE INTO pages (path) VALUES (?) returning rowid",
+                        params![display_path],
+                        |row: &Row| -> Result<i64, _> { Ok(row.get(0)?) },
+                    );
+
+                    let page_id = match page_id {
+                        Ok(id) => id,
+                        Err(e) => conn
+                            .query_row(
+                                "SELECT rowid FROM pages WHERE path = ?",
+                                params![display_path],
+                                |row: &Row| -> Result<i64, _> { Ok(row.get(0)?) },
+                            )
+                            .into_diagnostic()?,
+                    };
+
                     let content = std::fs::read_to_string(path).into_diagnostic()?;
                     let sentences = client.split_by_sentences(&content).await?;
 
-                    for s in sentences {
+                    for (i, s) in sentences.into_iter().enumerate() {
                         print!(".");
-                        embed_sentence(&conn, &client, &s).await?;
+                        std::io::stdout().flush().unwrap();
+
+                        embed_sentence(&conn, &client, &s, page_id, i).await?;
                     }
                     println!();
+                    // todo!();
                 }
             }
         }
@@ -77,7 +99,13 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn embed_sentence(conn: &Connection, client: &Client, sentence: &str) -> Result<()> {
+async fn embed_sentence(
+    conn: &Connection,
+    client: &Client,
+    sentence: &str,
+    page_id: i64,
+    page_index: usize,
+) -> Result<()> {
     let embedding_resp = client
         .embeddings(EmbeddingsRequest::new(sentence.to_string()))
         .await?;
@@ -85,10 +113,17 @@ async fn embed_sentence(conn: &Connection, client: &Client, sentence: &str) -> R
     let embedding_json = serde_json::to_string(&embedding).into_diagnostic()?;
 
     let mut stmt = conn
-        .prepare("INSERT OR IGNORE INTO sentences (text, embedding) VALUES (?, vector_to_blob(vector_from_json(?)))")
+        .prepare(
+            "
+        INSERT OR IGNORE INTO
+        sentences
+        (text, embedding, page_id, page_index)
+        VALUES
+        (?, vector_to_blob(vector_from_json(?)), ?, ?)",
+        )
         .into_diagnostic()?;
-
-    stmt.execute((sentence, embedding_json)).into_diagnostic()?;
+    stmt.execute((sentence, embedding_json, page_id, page_index))
+        .into_diagnostic()?;
 
     Ok(())
 }

@@ -71,6 +71,8 @@ impl Client {
     }
 
     pub(crate) async fn split_by_sentences(&self, blob: &str) -> Result<Vec<String>> {
+        let started = std::time::Instant::now();
+
         let prompt = format!(
         "I will paste a block of markdown. I need you to remove all the formatting, and break each sentence onto its own line
         Make sure each sentence has a blank line between it. Code blocks should be considered a single sentence.
@@ -80,6 +82,8 @@ impl Client {
         let resp = self.completion(request).await?;
 
         let message = resp.choices[0].message.content.clone();
+
+        println!("Splitting by sentences took {:?}", started.elapsed());
 
         Ok(message.split("\n\n").map(|s| s.to_string()).collect())
     }
