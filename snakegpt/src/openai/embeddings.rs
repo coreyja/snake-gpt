@@ -13,9 +13,9 @@ pub(crate) struct EmbeddingsRequest {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub(crate) struct EmbeddingData {
-    embedding: Vec<f64>,
-    index: i64,
-    object: String,
+    pub(crate) embedding: Vec<f64>,
+    pub(crate) index: i64,
+    pub(crate) object: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -26,10 +26,10 @@ pub(crate) struct EmbeddingUsage {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub(crate) struct EmbeddingResponse {
-    data: Vec<EmbeddingData>,
-    model: String,
-    object: String,
-    usage: EmbeddingUsage,
+    pub(crate) data: Vec<EmbeddingData>,
+    pub(crate) model: String,
+    pub(crate) object: String,
+    pub(crate) usage: EmbeddingUsage,
 }
 
 impl EmbeddingsRequest {

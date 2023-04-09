@@ -1,4 +1,5 @@
 use miette::{IntoDiagnostic, Result};
+use openai::Client;
 use rusqlite::Connection;
 
 use crate::openai::{
@@ -7,22 +8,13 @@ use crate::openai::{
 };
 
 mod openai;
+mod schema;
 
 static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // let config = Config::from_env()?;
-
-    // let client = config.client()?;
-
-    // let response_body = client.embeddings("Hello world!").await?;
-
-    // dbg!(&response_body);
-
-    // Ok(())
-
-    let conn = Connection::open_in_memory().into_diagnostic()?;
+    let conn = Connection::open("sample.v0.db").into_diagnostic()?;
 
     load_my_extension(&conn)?;
 
@@ -31,6 +23,29 @@ async fn main() -> Result<()> {
         Ok(())
     })
     .into_diagnostic()?;
+
+    schema::setup_schema_v0(&conn)?;
+
+    let config = Config::from_env()?;
+    let client = config.client()?;
+
+    embed_sentence(&conn, &client, "Hello, world!").await?;
+
+    Ok(())
+}
+
+async fn embed_sentence(conn: &Connection, client: &Client, sentence: &str) -> Result<()> {
+    let embedding_resp = client
+        .embeddings(EmbeddingsRequest::new(sentence.to_string()))
+        .await?;
+    let embedding = embedding_resp.data[0].embedding.clone();
+    let embedding_json = serde_json::to_string(&embedding).into_diagnostic()?;
+
+    let mut stmt = conn
+        .prepare("INSERT OR IGNORE INTO sentences (text, embedding) VALUES (?, vector_to_blob(vector_from_json(?)))")
+        .into_diagnostic()?;
+
+    stmt.execute((sentence, embedding_json)).into_diagnostic()?;
 
     Ok(())
 }
