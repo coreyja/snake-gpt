@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::APP_USER_AGENT;
 
+pub(crate) mod completion;
 pub(crate) mod embeddings;
 
 #[derive(Debug, Clone)]

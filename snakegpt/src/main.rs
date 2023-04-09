@@ -1,8 +1,10 @@
+use bstr::{BStr, ByteSlice};
 use miette::{IntoDiagnostic, Result};
 use openai::Client;
 use rusqlite::Connection;
 
 use crate::openai::{
+    completion::CompletionRequest,
     embeddings::{EmbeddingResponse, EmbeddingsRequest},
     Config,
 };
@@ -29,7 +31,13 @@ async fn main() -> Result<()> {
     let config = Config::from_env()?;
     let client = config.client()?;
 
-    embed_sentence(&conn, &client, "Hello, world!").await?;
+    let example = include_str!("../../../battlesnake-community-docs/README.md");
+
+    let sentences = client.split_by_sentences(example).await?;
+
+    for s in sentences {
+        embed_sentence(&conn, &client, &s).await?;
+    }
 
     Ok(())
 }

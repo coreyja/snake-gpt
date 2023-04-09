@@ -22,3 +22,10 @@ Then we will use sqlite and [`sqlite-vss`]( https://github.com/asg017/sqlite-vss
 
 We will make a prompt using the above information as context, with the users full query included. ChatGPT will
 be responsible for taking the contexts and question and forming a result
+
+#### Ideas
+
+##### Sentence Splitting
+
+I wonder if we could feed the Markdown into ChatGPT and ask it to make each sentence on its own line.
+Then we could simply use `lines()` to split it up.
