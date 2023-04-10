@@ -1,6 +1,5 @@
 use miette::{IntoDiagnostic, Result};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 use super::Client;
 

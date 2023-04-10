@@ -1,6 +1,5 @@
 use miette::{Context, IntoDiagnostic, Result};
 use reqwest::header::{HeaderValue, AUTHORIZATION};
-use serde::{Deserialize, Serialize};
 
 use crate::APP_USER_AGENT;
 

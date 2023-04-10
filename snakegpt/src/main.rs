@@ -1,22 +1,13 @@
 use clap::Parser;
 use futures::{stream, StreamExt};
 use itertools::Itertools;
-use std::{
-    io::Write,
-    path::{Path, PathBuf},
-    process::exit,
-};
+use std::path::PathBuf;
 
-use bstr::{BStr, ByteSlice};
-use miette::{Diagnostic, IntoDiagnostic, Result};
+use miette::{IntoDiagnostic, Result};
 use openai::Client;
 use rusqlite::{params, Connection, Row};
 
-use crate::openai::{
-    completion::CompletionRequest,
-    embeddings::{EmbeddingResponse, EmbeddingsRequest},
-    Config,
-};
+use crate::openai::{embeddings::EmbeddingsRequest, Config};
 
 mod openai;
 mod schema;
@@ -87,12 +78,12 @@ async fn main() -> Result<()> {
                 let page_id = conn.query_row(
                     "INSERT OR IGNORE INTO pages (path) VALUES (?) returning rowid",
                     params![display_path],
-                    |row: &Row| -> Result<i64, _> { Ok(row.get(0)?) },
+                    |row: &Row| -> Result<i64, _> { row.get(0) },
                 );
 
                 let (page_id, parsed_text) = match page_id {
                     Ok(id) => (id, None),
-                    Err(e) => conn
+                    Err(_) => conn
                         .query_row(
                             "SELECT rowid, parsed_text FROM pages WHERE path = ?",
                             params![display_path],
@@ -155,7 +146,7 @@ async fn main() -> Result<()> {
                 let (page_id, text) = row.into_diagnostic()?;
                 for (i, sentence) in text.split("\n\n").enumerate() {
                     // TODO: Skip if already embedded
-                    embed_sentence(&conn, &client, &sentence, page_id, i).await?;
+                    embed_sentence(conn, client, sentence, page_id, i).await?;
                 }
 
                 Result::<_>::Ok(page_id)
