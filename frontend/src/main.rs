@@ -1,20 +1,73 @@
+use gloo_net::http::Request;
+use serde::{Deserialize, Serialize};
 use yew::prelude::*;
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+struct AnswerResp {
+    answer: String,
+    question: String,
+}
 
 #[function_component]
 fn App() -> Html {
-    let counter = use_state(|| 0);
+    let textarea_ref = use_node_ref();
+
+    let question: UseStateHandle<Option<String>> = use_state(|| None);
+
+    let answer: UseStateHandle<Option<String>> = use_state(|| None);
+
     let onclick = {
-        let counter = counter.clone();
+        let question = question.clone();
+        let textarea_ref = textarea_ref.clone();
+
         move |_| {
-            let value = *counter + 1;
-            counter.set(value);
+            let textarea = textarea_ref.cast::<web_sys::HtmlTextAreaElement>().unwrap();
+            let value = textarea.value();
+
+            question.set(Some(value));
         }
     };
 
+    {
+        let question = question.clone();
+        let answer = answer.clone();
+
+        use_effect_with_deps(
+            move |question| {
+                let question = question.clone();
+
+                wasm_bindgen_futures::spawn_local(async move {
+                    let Some(q) = question.as_ref() else {
+                        return 
+                    };
+
+                    let answer_resp: AnswerResp =
+                        Request::post("http://localhost:3000/api/v0/chat")
+                            .body(q.to_owned())
+                            .send()
+                            .await
+                            .unwrap()
+                            .json()
+                            .await
+                            .unwrap();
+
+                    answer.set(Some(answer_resp.answer));
+                });
+            },
+            question,
+        );
+    }
+
     html! {
         <div>
+            <textarea ref={textarea_ref} placeholder="Enter your Battlesnake Question" rows=10 cols=50 />
             <button {onclick}>{ "+1" }</button>
-            <p>{ *counter }</p>
+            if let Some(q) = question.as_ref() {
+                <p>{"Question: "}{ q }</p>
+            }
+            if let Some(a) = answer.as_ref() {
+                <p>{"Answer: "}{ a }</p>
+            }
         </div>
     }
 }
