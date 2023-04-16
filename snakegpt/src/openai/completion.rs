@@ -5,7 +5,7 @@ use super::Client;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub(crate) struct Message {
-    content: String,
+    pub content: String,
     role: String,
 }
 
@@ -31,7 +31,7 @@ impl CompletionRequest {
 pub(crate) struct CompletionChoice {
     finish_reason: String,
     index: i64,
-    message: Message,
+    pub message: Message,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -43,12 +43,12 @@ pub(crate) struct CompletionUsage {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub(crate) struct CompletionResponse {
-    choices: Vec<CompletionChoice>,
-    created: i64,
-    id: String,
-    model: String,
-    object: String,
-    usage: CompletionUsage,
+    pub(crate) choices: Vec<CompletionChoice>,
+    pub(crate) created: i64,
+    pub(crate) id: String,
+    pub(crate) model: String,
+    pub(crate) object: String,
+    pub(crate) usage: CompletionUsage,
 }
 
 impl Client {
