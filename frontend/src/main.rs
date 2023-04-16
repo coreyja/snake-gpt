@@ -5,6 +5,11 @@ use yew::prelude::*;
 #[derive(Deserialize, Serialize, Debug, Clone)]
 struct AnswerResp {
     answer: String,
+    prompt: String,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+struct ChatRequest {
     question: String,
 }
 
@@ -15,6 +20,7 @@ fn App() -> Html {
     let question: UseStateHandle<Option<String>> = use_state(|| None);
 
     let answer: UseStateHandle<Option<String>> = use_state(|| None);
+    let prompt: UseStateHandle<Option<String>> = use_state(|| None);
 
     let onclick = {
         let question = question.clone();
@@ -31,6 +37,7 @@ fn App() -> Html {
     {
         let question = question.clone();
         let answer = answer.clone();
+        let prompt = prompt.clone();
 
         use_effect_with_deps(
             move |question| {
@@ -40,10 +47,12 @@ fn App() -> Html {
                     let Some(q) = question.as_ref() else {
                         return 
                     };
+                    let req = ChatRequest { question: q.to_owned() };
 
                     let answer_resp: AnswerResp =
                         Request::post("http://localhost:3000/api/v0/chat")
-                            .body(q.to_owned())
+                            .json(&req).unwrap()
+                            // .body(q.to_owned())
                             .send()
                             .await
                             .unwrap()
@@ -52,6 +61,7 @@ fn App() -> Html {
                             .unwrap();
 
                     answer.set(Some(answer_resp.answer));
+                    prompt.set(Some(answer_resp.prompt));
                 });
             },
             question,
@@ -64,6 +74,9 @@ fn App() -> Html {
             <button {onclick}>{ "+1" }</button>
             if let Some(q) = question.as_ref() {
                 <p>{"Question: "}{ q }</p>
+            }
+            if let Some(p) = prompt.as_ref() {
+                <p>{"Prompt: "}{ p }</p>
             }
             if let Some(a) = answer.as_ref() {
                 <p>{"Answer: "}{ a }</p>

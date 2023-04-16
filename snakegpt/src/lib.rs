@@ -31,22 +31,16 @@ pub fn setup() -> Result<Connection> {
     Ok(conn)
 }
 
-pub async fn respond_to(query: String) -> Result<String> {
+pub async fn respond_to(query: String) -> Result<(String, String)> {
     let conn = setup()?;
 
     let config = Config::from_env()?;
     let client = config.client()?;
 
-    println!("Query: {}", &query);
-    println!("About to fetch Embeddings for query");
-
     let question = &query;
     let embedding = fetch_embedding(&client, question).await?;
     let embedding_json = serde_json::to_string(&embedding).into_diagnostic()?;
 
-    println!("Retrieved Embeddings. Finding related content");
-
-    println!("About to make VSS Table");
     conn.execute_batch(
         "
       DROP TABLE IF EXISTS vss_sentences;
@@ -57,7 +51,6 @@ pub async fn respond_to(query: String) -> Result<String> {
     )
     .into_diagnostic()?;
 
-    println!("About to populate VSS Table");
     conn.execute(
         "insert into vss_sentences(rowid, embedding)
       select rowid, embedding from sentences;",
@@ -65,42 +58,42 @@ pub async fn respond_to(query: String) -> Result<String> {
     )
     .into_diagnostic()?;
 
-    println!("About to query VSS Table");
-
-    let mut st = conn
-        .prepare(
-            "select rowid, distance
+    let nearest_embeddings = {
+        let mut st = conn
+            .prepare(
+                "select rowid, distance
   from vss_sentences
   where vss_search(
     embedding,
     vector_from_json(?1)
   )
   limit 5;",
-        )
-        .into_diagnostic()?;
-    let nearest_embeddings: Vec<Result<(u32, f64), _>> = st
-        .query_map(params![&embedding_json], |row| {
-            Ok((row.get(0)?, row.get(1)?))
-        })
-        .into_diagnostic()?
-        .collect_vec();
+            )
+            .into_diagnostic()?;
+        let nearest_embeddings: Vec<Result<(u32, f64), _>> = st
+            .query_map(params![&embedding_json], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })
+            .into_diagnostic()?
+            .collect_vec();
 
-    let nearest_embeddings: Vec<(String, f64)> = nearest_embeddings
-        .into_iter()
-        .map(|result| {
-            let (rowid, distance) = result.into_diagnostic()?;
-            let mut stmt = conn
-                .prepare("select text from sentences where rowid = ?1")
-                .into_diagnostic()?;
-            let text: String = stmt
-                .query_row(params![rowid], |row| row.get(0))
-                .into_diagnostic()?;
+        let nearest_embeddings: Vec<(String, f64)> = nearest_embeddings
+            .into_iter()
+            .map(|result| {
+                let (rowid, distance) = result.into_diagnostic()?;
+                let mut stmt = conn
+                    .prepare("select text from sentences where rowid = ?1")
+                    .into_diagnostic()?;
+                let text: String = stmt
+                    .query_row(params![rowid], |row| row.get(0))
+                    .into_diagnostic()?;
 
-            Ok((text, distance))
-        })
-        .collect::<Result<Vec<_>>>()?;
+                Ok((text, distance))
+            })
+            .collect::<Result<Vec<_>>>()?;
 
-    println!("Found related content, creating Prompt");
+        nearest_embeddings
+    };
 
     let context_strings = nearest_embeddings
         .iter()
@@ -136,7 +129,7 @@ pub async fn respond_to(query: String) -> Result<String> {
 
     let first_choice = answer.choices.first().unwrap().message.content.clone();
 
-    Ok(first_choice)
+    Ok((first_choice, prompt))
 }
 
 fn load_my_extension(conn: &Connection) -> Result<()> {
