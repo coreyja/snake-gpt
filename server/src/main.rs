@@ -1,12 +1,18 @@
 use axum::{
+    body::{boxed, Body},
     extract,
-    http::{self, Method},
+    http::{self, Method, StatusCode},
+    response::Response,
     routing::{get, post},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
 use snakegpt::respond_to;
-use tower_http::cors::{Any, CorsLayer};
+use tower::ServiceExt;
+use tower_http::{
+    cors::{Any, CorsLayer},
+    services::ServeDir,
+};
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 struct AnswerResp {
@@ -30,7 +36,6 @@ async fn main() {
 
     // build our application with a single route
     let app = Router::new()
-        .route("/", get(|| async { "Hello, World!" }))
         .route(
             "/api/v0/chat",
             post(|extract::Json(r): Json<ChatRequest>| async {
@@ -41,6 +46,15 @@ async fn main() {
                 Json(AnswerResp { answer, prompt })
             }),
         )
+        .fallback_service(get(|req| async move {
+            match ServeDir::new("./dist").oneshot(req).await {
+                Ok(res) => res.map(boxed),
+                Err(err) => Response::builder()
+                    .status(StatusCode::INTERNAL_SERVER_ERROR)
+                    .body(boxed(Body::from(format!("error: {err}"))))
+                    .expect("error response"),
+            }
+        }))
         .layer(cors);
 
     // run it with hyper on localhost:3000
