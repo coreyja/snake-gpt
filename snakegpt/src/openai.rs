@@ -3,18 +3,18 @@ use reqwest::header::{HeaderValue, AUTHORIZATION};
 
 use crate::APP_USER_AGENT;
 
-pub(crate) mod completion;
-pub(crate) mod embeddings;
+pub mod completion;
+pub mod embeddings;
 
 #[derive(Debug, Clone)]
-pub(crate) struct Config {
+pub struct Config {
     api_key: String,
 }
 
-pub(crate) struct Client(pub reqwest::Client);
+pub struct Client(pub reqwest::Client);
 
 impl Config {
-    pub(crate) fn from_env() -> Result<Self> {
+    pub fn from_env() -> Result<Self> {
         let api_key = std::env::var("OPENAI_API_KEY")
             .into_diagnostic()
             .wrap_err("Could not find OPENAI_API_KEY env var")?;
@@ -22,7 +22,7 @@ impl Config {
         Ok(Self { api_key })
     }
 
-    pub(crate) fn client(&self) -> Result<Client> {
+    pub fn client(&self) -> Result<Client> {
         let mut headers = reqwest::header::HeaderMap::new();
 
         let value = format!("Bearer {}", self.api_key);

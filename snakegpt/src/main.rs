@@ -1,19 +1,14 @@
-use clap::{Args, Parser, Subcommand};
+use std::path::PathBuf;
+
+use clap::*;
 use futures::{stream, StreamExt};
 use indoc::formatdoc;
 use itertools::Itertools;
-use std::{os::unix::prelude::PermissionsExt, path::PathBuf};
-
 use miette::{IntoDiagnostic, Result};
-use openai::Client;
 use rusqlite::{params, Connection, Row};
-
-use crate::openai::{completion::CompletionRequest, embeddings::EmbeddingsRequest, Config};
-
-mod openai;
-mod schema;
-
-static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
+use snakegpt::{
+    fetch_embedding, setup, CompletionRequest, Config, OpenAiClient, CONCURRENT_REQUESTS,
+};
 
 #[derive(Args, Debug)]
 
@@ -47,8 +42,6 @@ struct CliArgs {
     command: CliCommand,
 }
 
-const CONCURRENT_REQUESTS: usize = 5;
-
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = CliArgs::parse();
@@ -58,8 +51,6 @@ async fn main() -> Result<()> {
         CliCommand::Query(args) => query(args).await,
     }
 }
-
-const DB_NAME: &str = "sample.v0.db";
 
 async fn query(args: QueryArgs) -> Result<()> {
     let conn = setup()?;
@@ -298,21 +289,9 @@ async fn prepare(args: PrepareArgs) -> Result<()> {
     Ok(())
 }
 
-fn setup() -> Result<Connection> {
-    let conn = Connection::open(DB_NAME).into_diagnostic()?;
-    load_my_extension(&conn)?;
-    conn.query_row("select vss_version()", (), |result| {
-        dbg!(&result);
-        Ok(())
-    })
-    .into_diagnostic()?;
-    schema::setup_schema_v0(&conn)?;
-    Ok(conn)
-}
-
 async fn embed_sentence(
     conn: &Connection,
-    client: &Client,
+    client: &OpenAiClient,
     sentence: &str,
     page_id: i64,
     page_index: usize,
@@ -334,27 +313,4 @@ async fn embed_sentence(
         .into_diagnostic()?;
 
     Ok(())
-}
-
-async fn fetch_embedding(client: &Client, sentence: &str) -> Result<Vec<f64>, miette::ErrReport> {
-    let embedding_resp = client
-        .embeddings(EmbeddingsRequest::new(sentence.to_string()))
-        .await?;
-    let embedding = embedding_resp.data[0].embedding.clone();
-    Ok(embedding)
-}
-
-fn load_my_extension(conn: &Connection) -> Result<()> {
-    // Safety: We fully trust the loaded extension and execute no untrusted SQL
-    // while extension loading is enabled.
-    unsafe {
-        conn.load_extension_enable().into_diagnostic()?;
-        conn.load_extension("./vendor/vector0", None)
-            .into_diagnostic()?;
-        conn.load_extension("./vendor/vss0", None)
-            .into_diagnostic()?;
-        conn.load_extension_disable().into_diagnostic()?;
-
-        Ok(())
-    }
 }

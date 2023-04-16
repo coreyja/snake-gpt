@@ -6,34 +6,34 @@ use super::Client;
 const EMBEDDING_DEFAULT_MODEL: &str = "text-embedding-ada-002";
 
 #[derive(Debug, Clone, Serialize)]
-pub(crate) struct EmbeddingsRequest {
+pub struct EmbeddingsRequest {
     input: String,
     model: &'static str,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub(crate) struct EmbeddingData {
-    pub(crate) embedding: Vec<f64>,
-    pub(crate) index: i64,
-    pub(crate) object: String,
+pub struct EmbeddingData {
+    pub embedding: Vec<f64>,
+    pub index: i64,
+    pub object: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub(crate) struct EmbeddingUsage {
+pub struct EmbeddingUsage {
     prompt_tokens: i64,
     total_tokens: i64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub(crate) struct EmbeddingResponse {
-    pub(crate) data: Vec<EmbeddingData>,
-    pub(crate) model: String,
-    pub(crate) object: String,
-    pub(crate) usage: EmbeddingUsage,
+pub struct EmbeddingResponse {
+    pub data: Vec<EmbeddingData>,
+    pub model: String,
+    pub object: String,
+    pub usage: EmbeddingUsage,
 }
 
 impl EmbeddingsRequest {
-    pub(crate) fn new(input: String) -> Self {
+    pub fn new(input: String) -> Self {
         Self {
             input,
             model: EMBEDDING_DEFAULT_MODEL,
@@ -42,7 +42,7 @@ impl EmbeddingsRequest {
 }
 
 impl Client {
-    pub(crate) async fn embeddings(
+    pub async fn embeddings(
         &self,
         request: impl IntoEmbeddingsRequest,
     ) -> Result<EmbeddingResponse> {
@@ -64,7 +64,7 @@ impl Client {
     }
 }
 
-pub(crate) trait IntoEmbeddingsRequest {
+pub trait IntoEmbeddingsRequest {
     fn into(self) -> EmbeddingsRequest;
 }
 

@@ -1,7 +1,7 @@
 use miette::{IntoDiagnostic, Result};
 use rusqlite::Connection;
 
-pub(crate) fn setup_schema_v0(conn: &Connection) -> Result<()> {
+pub fn setup_schema_v0(conn: &Connection) -> Result<()> {
     conn.execute(
         "CREATE TABLE IF NOT EXISTS pages (
             path                  TEXT NOT NULL,
