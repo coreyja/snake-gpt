@@ -12,5 +12,6 @@ Cargo.lock
 .envrc
 
 vendor/
+dist/
 
 *.db
