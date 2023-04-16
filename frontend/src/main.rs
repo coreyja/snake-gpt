@@ -71,12 +71,13 @@ fn App() -> Html {
     html! {
         <div>
             <textarea ref={textarea_ref} placeholder="Enter your Battlesnake Question" rows=10 cols=50 />
-            <button {onclick}>{ "+1" }</button>
+            <br />
+            <button {onclick}>{ "Submit" }</button>
             if let Some(q) = question.as_ref() {
                 <p>{"Question: "}{ q }</p>
             }
             if let Some(p) = prompt.as_ref() {
-                <p>{"Prompt: "}{ p }</p>
+                <pre>{"Prompt: "}{ p }</pre>
             }
             if let Some(a) = answer.as_ref() {
                 <p>{"Answer: "}{ a }</p>
