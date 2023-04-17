@@ -16,7 +16,7 @@ COPY . .
 RUN cd frontend && trunk build --release
 RUN cargo build --release --bin server
 
-RUN cargo run --bin snakegpt-cli -- download --project battlesnake_community_docs
+RUN S3_BUCKET=snakegpt cargo run --release --bin snakegpt-cli -- download --project battlesnake_community_docs
 
 # We do not need the Rust toolchain to run the binary!
 FROM debian:buster-slim AS runtime
