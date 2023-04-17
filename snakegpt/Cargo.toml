@@ -9,6 +9,7 @@ edition = "2021"
 aws-config = "0.55.1"
 aws-sdk-s3 = "0.26.0"
 bstr = { version = "1.4.0", features = ["unicode"] }
+chrono = "0.4.24"
 clap = { version = "4.2.1", features = ["derive"] }
 futures = "0.3.28"
 indoc = "2.0.1"

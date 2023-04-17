@@ -1,5 +1,9 @@
-use std::path::PathBuf;
+use std::{
+    io::Bytes,
+    path::{Path, PathBuf},
+};
 
+use aws_sdk_s3::primitives::ByteStream;
 use clap::*;
 use futures::{stream, StreamExt};
 use indoc::formatdoc;
@@ -7,8 +11,9 @@ use itertools::Itertools;
 use miette::{IntoDiagnostic, Result};
 use rusqlite::{params, Connection, OptionalExtension, Row};
 use snakegpt::{
-    fetch_embedding, setup, CompletionRequest, Config, OpenAiClient, CONCURRENT_REQUESTS,
+    fetch_embedding, setup, CompletionRequest, Config, OpenAiClient, CONCURRENT_REQUESTS, DB_NAME,
 };
+use tokio::io::BufReader;
 
 #[derive(Args, Debug)]
 
@@ -250,7 +255,6 @@ async fn prepare(args: PrepareArgs) -> Result<()> {
             }
         })
         .await;
-
     let mut st = conn
         .prepare("SELECT rowid, parsed_text FROM pages")
         .into_diagnostic()?;
@@ -285,6 +289,50 @@ async fn prepare(args: PrepareArgs) -> Result<()> {
             }
         })
         .await;
+
+    upload_db(&args).await?;
+
+    Ok(())
+}
+
+async fn upload_db(args: &PrepareArgs) -> Result<()> {
+    let config = aws_config::load_from_env().await;
+    let client = aws_sdk_s3::Client::new(&config);
+    let file = ByteStream::from_path(Path::new(DB_NAME))
+        .await
+        .into_diagnostic()?;
+
+    let path: PathBuf = args.path.clone();
+
+    let path_name = path
+        .file_name()
+        .ok_or_else(|| miette::miette!("No file name found for path"))?
+        .to_string_lossy()
+        .to_string();
+
+    let now = chrono::Utc::now();
+
+    let key = format!("{path_name}/{now}/full.db", now = now.to_rfc2822());
+
+    client
+        .put_object()
+        .bucket(std::env::var("S3_BUCKET").into_diagnostic()?)
+        .key(&key)
+        .body(file)
+        .send()
+        .await
+        .into_diagnostic()?;
+
+    //Upload a file called `latest` that points to the latest db
+    let key_bytes: Vec<_> = key.as_bytes().to_vec();
+    client
+        .put_object()
+        .bucket(std::env::var("S3_BUCKET").into_diagnostic()?)
+        .key(format!("{path_name}/latest"))
+        .body(ByteStream::from(key_bytes))
+        .send()
+        .await
+        .into_diagnostic()?;
 
     Ok(())
 }
