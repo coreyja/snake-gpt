@@ -50,7 +50,7 @@ fn App() -> Html {
                     let req = ChatRequest { question: q.to_owned() };
 
                     let answer_resp: AnswerResp =
-                        Request::post("http://localhost:3000/api/v0/chat")
+                        Request::post("https://snakegpt-zcdnm.ondigitalocean.app/api/v0/chat")
                             .json(&req).unwrap()
                             // .body(q.to_owned())
                             .send()
