@@ -1,8 +1,3 @@
-ARG S3_BUCKET
-ARG AWS_REGION=us-east-1
-ARG AWS_ACCESS_KEY_ID
-ARG AWS_SECRET_ACCESS_KEY
-
 FROM lukemathwalker/cargo-chef:latest-rust-1 AS chef
 WORKDIR /app
 
@@ -20,6 +15,11 @@ RUN cargo chef cook --release --recipe-path recipe.json
 COPY . .
 RUN cd frontend && trunk build --release
 RUN cargo build --release --bin server
+
+ARG S3_BUCKET
+ARG AWS_REGION=us-east-1
+ARG AWS_ACCESS_KEY_ID
+ARG AWS_SECRET_ACCESS_KEY
 
 RUN cargo run --release --bin snakegpt-cli -- download --project battlesnake_community_docs
 
