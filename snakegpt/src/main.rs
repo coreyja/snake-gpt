@@ -1,5 +1,6 @@
 use std::{
-    io::Bytes,
+    fs::File,
+    io::{Bytes, Write},
     path::{Path, PathBuf},
 };
 
@@ -27,6 +28,7 @@ struct PrepareArgs {
 enum CliCommand {
     Prepare(PrepareArgs),
     Query(QueryArgs),
+    Download(DownloadArgs),
 }
 
 #[derive(Args, Debug)]
@@ -34,6 +36,12 @@ struct QueryArgs {
     query: String,
     #[arg(short = 'p', long, default_value = "false")]
     show_prompt: bool,
+}
+
+#[derive(Args, Debug)]
+struct DownloadArgs {
+    #[arg(short, long)]
+    project: String,
 }
 
 /// SnakeGPT
@@ -54,6 +62,7 @@ async fn main() -> Result<()> {
     match args.command {
         CliCommand::Prepare(args) => prepare(args).await,
         CliCommand::Query(args) => query(args).await,
+        CliCommand::Download(args) => download(args).await,
     }
 }
 
@@ -333,6 +342,36 @@ async fn upload_db(args: &PrepareArgs) -> Result<()> {
         .send()
         .await
         .into_diagnostic()?;
+
+    Ok(())
+}
+
+async fn download(args: DownloadArgs) -> Result<()> {
+    let config = aws_config::load_from_env().await;
+    let client = aws_sdk_s3::Client::new(&config);
+
+    let resp = client
+        .get_object()
+        .bucket(std::env::var("S3_BUCKET").into_diagnostic()?)
+        .key(format!("{path_name}/latest", path_name = args.project))
+        .send()
+        .await
+        .into_diagnostic()?;
+
+    let data = resp.body.collect().await.into_diagnostic()?;
+    let latest_key = String::from_utf8(data.to_vec()).into_diagnostic()?;
+
+    let resp = client
+        .get_object()
+        .bucket(std::env::var("S3_BUCKET").into_diagnostic()?)
+        .key(latest_key)
+        .send()
+        .await
+        .into_diagnostic()?;
+    let data = resp.body.collect().await.into_diagnostic()?;
+
+    let mut file = File::create(DB_NAME).into_diagnostic()?;
+    file.write_all(&data.to_vec()).into_diagnostic()?;
 
     Ok(())
 }
