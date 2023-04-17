@@ -16,4 +16,4 @@ ARG AWS_SECRET_ACCESS_KEY
 
 RUN cargo run --release --bin snakegpt-cli -- download --project battlesnake-community-docs
 
-ENTRYPOINT ["/usr/local/bin/server"]
+ENTRYPOINT ["cargo", "run", "--release", "--bin", "server"]
