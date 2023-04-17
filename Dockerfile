@@ -16,8 +16,13 @@ COPY . .
 RUN cd frontend && trunk build --release
 RUN cargo build --release --bin server
 
+RUN cargo run --bin snakegpt-cli -- download --project battlesnake_community_docs
+
 # We do not need the Rust toolchain to run the binary!
 FROM debian:buster-slim AS runtime
 WORKDIR /app
 COPY --from=builder /app/target/release/server /usr/local/bin
+COPY --from=builder /app/dist /app/dist
+COPY --from=builder /app/*.db /app/
+
 ENTRYPOINT ["/usr/local/bin/server"]
