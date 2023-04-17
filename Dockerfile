@@ -6,14 +6,14 @@ COPY . .
 RUN cargo chef prepare --recipe-path recipe.json
 
 FROM chef AS builder 
-RUN cargo install --locked trunk wasm-bindgen-cli
+RUN wget -qO- https://github.com/thedodd/trunk/releases/download/v0.16.0/trunk-x86_64-unknown-linux-gnu.tar.gz | tar -xzf-
 RUN rustup target add wasm32-unknown-unknown
 COPY --from=planner /app/recipe.json recipe.json
 # Build dependencies - this is the caching Docker layer!
 RUN cargo chef cook --release --recipe-path recipe.json
 # Build application
 COPY . .
-RUN cd frontend && trunk build --release
+RUN cd frontend && ../trunk build --release
 RUN cargo build --release --bin server
 
 ARG S3_BUCKET
