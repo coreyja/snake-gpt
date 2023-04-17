@@ -5,7 +5,7 @@ use futures::{stream, StreamExt};
 use indoc::formatdoc;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, Result};
-use rusqlite::{params, Connection, Row};
+use rusqlite::{params, Connection, OptionalExtension, Row};
 use snakegpt::{
     fetch_embedding, setup, CompletionRequest, Config, OpenAiClient, CONCURRENT_REQUESTS,
 };
@@ -296,21 +296,30 @@ async fn embed_sentence(
     page_id: i64,
     page_index: usize,
 ) -> Result<()> {
-    let embedding = fetch_embedding(client, sentence).await?;
-    let embedding_json = serde_json::to_string(&embedding).into_diagnostic()?;
+    let row_id: Option<u64> = conn
+        .prepare("SELECT rowid FROM sentences WHERE text = ?")
+        .into_diagnostic()?
+        .query_row(params![sentence], |row| row.get(0))
+        .optional()
+        .into_diagnostic()?;
 
-    let mut stmt = conn
-        .prepare(
-            "
-        INSERT OR IGNORE INTO
+    if row_id.is_none() {
+        let embedding = fetch_embedding(client, sentence).await?;
+        let embedding_json = serde_json::to_string(&embedding).into_diagnostic()?;
+
+        let mut stmt = conn
+            .prepare(
+                "
+        INSERT INTO
         sentences
         (text, embedding, page_id, page_index)
         VALUES
         (?, vector_to_blob(vector_from_json(?)), ?, ?)",
-        )
-        .into_diagnostic()?;
-    stmt.execute((sentence, embedding_json, page_id, page_index))
-        .into_diagnostic()?;
+            )
+            .into_diagnostic()?;
+        stmt.execute((sentence, embedding_json, page_id, page_index))
+            .into_diagnostic()?;
+    }
 
     Ok(())
 }
