@@ -1,3 +1,8 @@
+ARG S3_BUCKET
+ARG AWS_REGION=us-east-1
+ARG AWS_ACCESS_KEY_ID
+ARG AWS_SECRET_ACCESS_KEY
+
 FROM lukemathwalker/cargo-chef:latest-rust-1 AS chef
 WORKDIR /app
 
@@ -16,7 +21,7 @@ COPY . .
 RUN cd frontend && trunk build --release
 RUN cargo build --release --bin server
 
-RUN S3_BUCKET=snakegpt cargo run --release --bin snakegpt-cli -- download --project battlesnake_community_docs
+RUN cargo run --release --bin snakegpt-cli -- download --project battlesnake_community_docs
 
 # We do not need the Rust toolchain to run the binary!
 FROM debian:buster-slim AS runtime
