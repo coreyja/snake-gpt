@@ -16,4 +16,10 @@ ARG AWS_SECRET_ACCESS_KEY
 
 RUN cargo run --release --bin snakegpt-cli -- download --project battlesnake-community-docs
 
+RUN mkdir -p /app/vendor && apt-get update && apt-get install -y curl \
+  && curl -L -o vector0.tar.gz https://github.com/asg017/sqlite-vss/releases/download/v0.0.3/sqlite-vss-v0.0.3-vector0-linux-x86_64.tar.gz \
+  && tar -xvzf vector0.tar.gz -C /app/vendor \
+  && curl -L -o vss0.tar.gz https://github.com/asg017/sqlite-vss/releases/download/v0.0.3/sqlite-vss-v0.0.3-vss0-linux-x86_64.tar.gz \
+  && tar -xvzf vss0.tar.gz -C /app/vendor
+
 ENTRYPOINT ["cargo", "run", "--release", "--bin", "server"]
