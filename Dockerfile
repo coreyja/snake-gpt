@@ -5,6 +5,8 @@ FROM rust AS builder
 RUN wget -qO- https://github.com/thedodd/trunk/releases/download/v0.16.0/trunk-x86_64-unknown-linux-gnu.tar.gz | tar -xzf-
 RUN rustup target add wasm32-unknown-unknown
 
+ARG APP_URL
+
 COPY . .
 RUN cd frontend && ../trunk build --release
 RUN cargo build --release --bin server

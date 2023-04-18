@@ -8,6 +8,8 @@ struct AnswerResp {
     prompt: String,
 }
 
+const APP_URL: Option<&str> = option_env!("APP_URL");
+
 #[derive(Deserialize, Serialize, Debug, Clone)]
 struct ChatRequest {
     question: String,
@@ -15,6 +17,9 @@ struct ChatRequest {
 
 #[function_component]
 fn App() -> Html {
+    let app_url = APP_URL.unwrap_or("http://localhost:3000");
+
+    let chat_api_url = format!("{app_url}/api/v0/chat");
     let textarea_ref = use_node_ref();
 
     let question: UseStateHandle<Option<String>> = use_state(|| None);
@@ -50,7 +55,7 @@ fn App() -> Html {
                     let req = ChatRequest { question: q.to_owned() };
 
                     let answer_resp: AnswerResp =
-                        Request::post("https://snakegpt-zcdnm.ondigitalocean.app/api/v0/chat")
+                        Request::post(&chat_api_url)
                             .json(&req).unwrap()
                             // .body(q.to_owned())
                             .send()
