@@ -33,5 +33,22 @@ pub fn setup_schema_v0(conn: &Connection) -> Result<()> {
     )
     .into_diagnostic()?;
 
+    conn.execute_batch(
+        "
+  DROP TABLE IF EXISTS vss_sentences;
+  create virtual table vss_sentences using vss0(
+      embedding(1536),
+    );
+  ",
+    )
+    .into_diagnostic()?;
+
+    conn.execute(
+        "insert into vss_sentences(rowid, embedding)
+  select rowid, embedding from sentences;",
+        (),
+    )
+    .into_diagnostic()?;
+
     Ok(())
 }

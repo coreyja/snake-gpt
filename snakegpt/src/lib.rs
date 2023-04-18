@@ -22,11 +22,6 @@ pub const DB_NAME: &str = "sample.v0.db";
 pub fn setup() -> Result<Connection> {
     let conn = Connection::open(DB_NAME).into_diagnostic()?;
     load_my_extension(&conn)?;
-    conn.query_row("select vss_version()", (), |result| {
-        dbg!(&result);
-        Ok(())
-    })
-    .into_diagnostic()?;
     schema::setup_schema_v0(&conn)?;
     Ok(conn)
 }
@@ -40,23 +35,6 @@ pub async fn respond_to(query: String) -> Result<(String, String)> {
     let question = &query;
     let embedding = fetch_embedding(&client, question).await?;
     let embedding_json = serde_json::to_string(&embedding).into_diagnostic()?;
-
-    conn.execute_batch(
-        "
-      DROP TABLE IF EXISTS vss_sentences;
-      create virtual table vss_sentences using vss0(
-          embedding(1536),
-        );
-      ",
-    )
-    .into_diagnostic()?;
-
-    conn.execute(
-        "insert into vss_sentences(rowid, embedding)
-      select rowid, embedding from sentences;",
-        (),
-    )
-    .into_diagnostic()?;
 
     let nearest_embeddings = {
         let mut st = conn
