@@ -27,15 +27,21 @@ fn App() -> Html {
     let answer: UseStateHandle<Option<String>> = use_state(|| None);
     let prompt: UseStateHandle<Option<String>> = use_state(|| None);
 
-    let onclick = {
+    let onsubmit = {
         let question = question.clone();
+        let answer = answer.clone();
+        let prompt = prompt.clone();
         let textarea_ref = textarea_ref.clone();
 
-        move |_| {
-            let textarea = textarea_ref.cast::<web_sys::HtmlTextAreaElement>().unwrap();
+        move |e: SubmitEvent| {
+            let textarea = textarea_ref.cast::<web_sys::HtmlInputElement>().unwrap();
             let value = textarea.value();
 
             question.set(Some(value));
+            answer.set(None);
+            prompt.set(None);
+
+            e.prevent_default();
         }
     };
 
@@ -75,9 +81,16 @@ fn App() -> Html {
 
     html! {
         <div>
-            <textarea ref={textarea_ref} placeholder="Enter your Battlesnake Question" rows=10 cols=50 />
-            <br />
-            <button {onclick}>{ "Submit" }</button>
+            <form onsubmit={onsubmit}>
+                <input
+                    type="text"
+                    ref={textarea_ref}
+                    placeholder="Enter your Battlesnake Question" rows=10 cols=50
+                    class="w-1/2"
+                />
+                <br />
+                <button>{ "Submit" }</button>
+            </form>
             if let Some(q) = question.as_ref() {
                 <p>{"Question: "}{ q }</p>
             }
