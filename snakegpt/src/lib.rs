@@ -73,11 +73,10 @@ pub async fn respond_to(query: String, conn: Arc<Mutex<Connection>>) -> Result<(
         nearest_embeddings
     };
 
-    let context_strings = nearest_embeddings
+    let context = nearest_embeddings
         .iter()
         .map(|(text, _)| format!("- {}", text.trim()))
         .join("\n");
-    let context_section = format!("### Context\n{context_strings}");
 
     let prompt = formatdoc!(
         "
@@ -94,7 +93,7 @@ pub async fn respond_to(query: String, conn: Arc<Mutex<Connection>>) -> Result<(
       Below the dashes is the users question that you should answer.
 
       Context:
-      {context_section}
+      {context}
 
       --------------------------------------
 
@@ -107,7 +106,7 @@ pub async fn respond_to(query: String, conn: Arc<Mutex<Connection>>) -> Result<(
 
     let first_choice = answer.choices.first().unwrap().message.content.clone();
 
-    Ok((first_choice, prompt))
+    Ok((first_choice, context))
 }
 
 fn load_my_extension(conn: &Connection) -> Result<()> {

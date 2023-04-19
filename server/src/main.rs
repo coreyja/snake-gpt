@@ -21,7 +21,7 @@ use tower_http::{
 #[derive(Deserialize, Serialize, Debug, Clone)]
 struct AnswerResp {
     answer: String,
-    prompt: String,
+    context: String,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -51,9 +51,9 @@ async fn main() -> Result<()> {
                  extract::Json(r): Json<ChatRequest>| async {
                     let question = r.question;
                     let resp = respond_to(question.clone(), conn);
-                    let (answer, prompt) = resp.await.unwrap();
+                    let (answer, context) = resp.await.unwrap();
 
-                    Json(AnswerResp { answer, prompt })
+                    Json(AnswerResp { answer, context })
                 },
             ),
         )

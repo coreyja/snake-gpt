@@ -5,7 +5,7 @@ use yew::prelude::*;
 #[derive(Deserialize, Serialize, Debug, Clone)]
 struct AnswerResp {
     answer: String,
-    prompt: String,
+    context: String,
 }
 
 const APP_URL: Option<&str> = option_env!("APP_URL");
@@ -72,7 +72,7 @@ fn App() -> Html {
                             .unwrap();
 
                     answer.set(Some(answer_resp.answer));
-                    prompt.set(Some(answer_resp.prompt));
+                    prompt.set(Some(answer_resp.context));
                 });
             },
             question,
@@ -81,21 +81,29 @@ fn App() -> Html {
 
     html! {
         <div>
-            <form onsubmit={onsubmit}>
-                <input
-                    type="text"
-                    ref={textarea_ref}
-                    placeholder="Enter your Battlesnake Question" rows=10 cols=50
-                    class="w-1/2"
-                />
-                <br />
+            <form onsubmit={onsubmit.clone()}>
+                <div class="flex flex-cols w-100vw">
+                    <textarea
+                        ref={textarea_ref}
+                        placeholder="Enter your Battlesnake Question" rows=10 cols=50
+                        class="w-1/2 shrink-0"
+                        onkeydown={move |e: KeyboardEvent| {
+                            if e.key() == "Enter" {
+                                e.prevent_default();
+                                onsubmit(SubmitEvent::new("").unwrap());
+                            }
+                            }}
+                    />
+                    <div class="shrink overflow-scroll">
+                        if let Some(p) = prompt.as_ref() {
+                            <pre class="break-words">{ p }</pre>
+                        }
+                    </div>
+                </div>
                 <button>{ "Submit" }</button>
             </form>
             if let Some(q) = question.as_ref() {
                 <p>{"Question: "}{ q }</p>
-            }
-            if let Some(p) = prompt.as_ref() {
-                <pre>{"Prompt: "}{ p }</pre>
             }
             if let Some(a) = answer.as_ref() {
                 <p>{"Answer: "}{ a }</p>
