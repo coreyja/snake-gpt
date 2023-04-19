@@ -16,7 +16,7 @@ indoc = "2.0.1"
 itertools = "0.10.5"
 miette = { version = "5.7.0", features = ["fancy"] }
 reqwest = { workspace = true }
-rusqlite = { version = "0.29.0", features = ["bundled", "load_extension"] }
+rusqlite = { workspace = true }
 serde = { version = "1.0.159", features = ["derive"] }
 serde_json = "1.0.95"
 tokio = { version = "1.27.0", features = ["full"] }

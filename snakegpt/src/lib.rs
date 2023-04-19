@@ -2,6 +2,7 @@ use clap::{Args, Parser, Subcommand};
 use futures::{stream, StreamExt};
 use indoc::formatdoc;
 use itertools::Itertools;
+use std::sync::{Arc, Mutex};
 use std::{os::unix::prelude::PermissionsExt, path::PathBuf};
 
 use miette::{IntoDiagnostic, Result};
@@ -26,9 +27,7 @@ pub fn setup() -> Result<Connection> {
     Ok(conn)
 }
 
-pub async fn respond_to(query: String) -> Result<(String, String)> {
-    let conn = setup()?;
-
+pub async fn respond_to(query: String, conn: Arc<Mutex<Connection>>) -> Result<(String, String)> {
     let config = Config::from_env()?;
     let client = config.client()?;
 
@@ -37,6 +36,7 @@ pub async fn respond_to(query: String) -> Result<(String, String)> {
     let embedding_json = serde_json::to_string(&embedding).into_diagnostic()?;
 
     let nearest_embeddings = {
+        let conn = conn.lock().unwrap();
         let mut st = conn
             .prepare(
                 "select rowid, distance

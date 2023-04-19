@@ -10,6 +10,8 @@ axum = "0.6.15"
 serde = { version = "1.0.160", features = ["derive"] }
 tokio = { version = "1.27.0", features = ["full"] }
 tower-http = { version = "0.4.0", features = ["cors", "fs"] }
+rusqlite = { workspace = true }
 
 snakegpt = { path = "../snakegpt" }
 tower = "0.4.13"
+miette = { version = "5.8.0", features = ["fancy"] }

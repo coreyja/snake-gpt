@@ -1,13 +1,17 @@
+use std::sync::{Arc, Mutex};
+
 use axum::{
     body::{boxed, Body},
-    extract,
+    extract::{self, State},
     http::{self, Method, StatusCode},
     response::Response,
     routing::{get, post},
     Json, Router,
 };
+use miette::Result;
+use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
-use snakegpt::respond_to;
+use snakegpt::{respond_to, setup};
 use tower::ServiceExt;
 use tower_http::{
     cors::{Any, CorsLayer},
@@ -26,7 +30,7 @@ struct ChatRequest {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()> {
     let cors = CorsLayer::new()
         // allow `GET` and `POST` when accessing the resource
         .allow_methods([Method::GET, Method::POST])
@@ -34,18 +38,26 @@ async fn main() {
         // allow requests from any origin
         .allow_origin(Any);
 
+    let conn = setup()?;
+    let conn = Mutex::new(conn);
+    let conn = Arc::new(conn);
+
     // build our application with a single route
     let app = Router::new()
         .route(
             "/api/v0/chat",
-            post(|extract::Json(r): Json<ChatRequest>| async {
-                let question = r.question;
-                let resp = respond_to(question.clone()).await.unwrap();
-                let (answer, prompt) = resp;
+            post(
+                |State(conn): State<Arc<Mutex<Connection>>>,
+                 extract::Json(r): Json<ChatRequest>| async {
+                    let question = r.question;
+                    let resp = respond_to(question.clone(), conn);
+                    let (answer, prompt) = resp.await.unwrap();
 
-                Json(AnswerResp { answer, prompt })
-            }),
+                    Json(AnswerResp { answer, prompt })
+                },
+            ),
         )
+        .with_state(conn)
         .fallback_service(get(|req| async move {
             match ServeDir::new("./dist").oneshot(req).await {
                 Ok(res) => res.map(boxed),
@@ -62,4 +74,6 @@ async fn main() {
         .serve(app.into_make_service())
         .await
         .unwrap();
+
+    Ok(())
 }
