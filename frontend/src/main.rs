@@ -94,7 +94,7 @@ fn App() -> Html {
                             }
                             }}
                     />
-                    <div class="shrink overflow-scroll">
+                    <div class="shrink overflow-scroll max-h-[50vh]">
                         if let Some(p) = prompt.as_ref() {
                             <pre class="break-words">{ p }</pre>
                         }

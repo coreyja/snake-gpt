@@ -60,13 +60,28 @@ pub async fn respond_to(query: String, conn: Arc<Mutex<Connection>>) -> Result<(
             .map(|result| {
                 let (rowid, distance) = result.into_diagnostic()?;
                 let mut stmt = conn
-                    .prepare("select text from sentences where rowid = ?1")
+                    .prepare("select page_id, page_index from sentences where rowid = ?1")
                     .into_diagnostic()?;
-                let text: String = stmt
-                    .query_row(params![rowid], |row| row.get(0))
+                let (page_id, page_index): (u32, u32) = stmt
+                    .query_row(params![rowid], |row| Ok((row.get(0)?, row.get(1)?)))
                     .into_diagnostic()?;
 
-                Ok((text, distance))
+                let texts = conn
+                    .prepare(
+                        "
+                    select text
+                    from sentences
+                    where page_id = ?1
+                    AND page_index >= (?2 - 3)
+                    AND page_index <= (?2 + 5)",
+                    )
+                    .into_diagnostic()?
+                    .query_map(params![page_id, page_index], |row| row.get(0))
+                    .into_diagnostic()?
+                    .collect::<Result<Vec<String>, rusqlite::Error>>()
+                    .into_diagnostic()?;
+
+                Ok((texts.join(" "), distance))
             })
             .collect::<Result<Vec<_>>>()?;
 
