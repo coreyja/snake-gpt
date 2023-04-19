@@ -24,4 +24,8 @@ RUN mkdir -p /app/vendor && apt-get update && apt-get install -y curl libgomp1 l
   && curl -L -o vss0.tar.gz https://github.com/asg017/sqlite-vss/releases/download/v0.0.3/sqlite-vss-v0.0.3-vss0-linux-x86_64.tar.gz \
   && tar -xvzf vss0.tar.gz -C /app/vendor
 
+RUN curl -sLO https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64 \
+  && chmod +x tailwindcss-linux-x64 \
+  && mv tailwindcss-linux-x64 /usr/local/bin/tailwindcss
+
 ENTRYPOINT ["cargo", "run", "--release", "--bin", "server"]
