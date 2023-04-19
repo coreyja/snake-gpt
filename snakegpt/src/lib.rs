@@ -45,7 +45,7 @@ pub async fn respond_to(query: String, conn: Arc<Mutex<Connection>>) -> Result<(
     embedding,
     vector_from_json(?1)
   )
-  limit 5;",
+  limit 10;",
             )
             .into_diagnostic()?;
         let nearest_embeddings: Vec<Result<(u32, f64), _>> = st
@@ -81,7 +81,7 @@ pub async fn respond_to(query: String, conn: Arc<Mutex<Connection>>) -> Result<(
                     .collect::<Result<Vec<String>, rusqlite::Error>>()
                     .into_diagnostic()?;
 
-                Ok((texts.join(" "), distance))
+                Ok((texts.join("\n"), distance))
             })
             .collect::<Result<Vec<_>>>()?;
 
@@ -90,8 +90,8 @@ pub async fn respond_to(query: String, conn: Arc<Mutex<Connection>>) -> Result<(
 
     let context = nearest_embeddings
         .iter()
-        .map(|(text, _)| format!("- {}", text.trim()))
-        .join("\n");
+        .map(|(text, _)| text.trim().replace("\n\n", "\n"))
+        .join("\n\n");
 
     let prompt = formatdoc!(
         "
