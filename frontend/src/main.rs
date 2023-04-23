@@ -42,11 +42,17 @@ fn App() -> Html {
     };
     {
         let answer = answer.clone();
+        let question = question.clone();
         let conversation_slug = conversation_slug.clone();
         use_interval(
             move || {
                 let conversation_slug = conversation_slug.clone();
                 let answer = answer.clone();
+                let question = question.clone();
+
+                if question.is_none() || answer.is_some() {
+                    return;
+                }
 
                 wasm_bindgen_futures::spawn_local(async move {
                     let answer_resp: Option<ConversationResponse> = Request::get(&format!(
