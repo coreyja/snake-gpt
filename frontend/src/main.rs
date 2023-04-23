@@ -1,9 +1,10 @@
+use std::sync::Arc;
+
 use gloo_net::http::Request;
 use shared::{ChatRequest, ConversationResponse};
 use uuid::Uuid;
 use yew::prelude::*;
-
-
+use yew_hooks::use_interval;
 
 const APP_URL: Option<&str> = option_env!("APP_URL");
 
@@ -12,6 +13,7 @@ fn App() -> Html {
     let app_url = APP_URL.unwrap_or("http://localhost:3000");
 
     let chat_api_url = format!("{app_url}/api/v0/chat");
+    let chat_api_url = Arc::new(chat_api_url);
     let textarea_ref = use_node_ref();
 
     let question: UseStateHandle<Option<String>> = use_state(|| None);
@@ -38,11 +40,39 @@ fn App() -> Html {
             e.prevent_default();
         }
     };
+    {
+        let answer = answer.clone();
+        let conversation_slug = conversation_slug.clone();
+        use_interval(
+            move || {
+                let conversation_slug = conversation_slug.clone();
+                let answer = answer.clone();
+
+                wasm_bindgen_futures::spawn_local(async move {
+                    let answer_resp: Option<ConversationResponse> = Request::get(&format!(
+                        "{app_url}/api/v0/conversations/{conversation_slug}",
+                        conversation_slug = *conversation_slug,
+                    ))
+                    .send()
+                    .await
+                    .unwrap()
+                    .json()
+                    .await
+                    .unwrap();
+
+                    if let Some(answer_resp) = answer_resp {
+                        answer.set(answer_resp.answer);
+                        // prompt.set(Some(answer_resp.context));
+                    }
+                });
+            },
+            1000,
+        );
+    }
 
     {
         let question = question.clone();
         let answer = answer.clone();
-        let prompt = prompt.clone();
         let conversation_slug = conversation_slug.clone();
 
         use_effect_with_deps(
@@ -51,20 +81,23 @@ fn App() -> Html {
 
                 wasm_bindgen_futures::spawn_local(async move {
                     let Some(q) = question.as_ref() else {
-                        return 
+                        return
                     };
-                    let req = ChatRequest { question: q.to_owned(), conversation_slug: *conversation_slug };
+                    let req = ChatRequest {
+                        question: q.to_owned(),
+                        conversation_slug: *conversation_slug,
+                    };
 
-                    let answer_resp: ConversationResponse =
-                        Request::post(&chat_api_url)
-                            .json(&req).unwrap()
-                            // .body(q.to_owned())
-                            .send()
-                            .await
-                            .unwrap()
-                            .json()
-                            .await
-                            .unwrap();
+                    let answer_resp: ConversationResponse = Request::post(&chat_api_url)
+                        .json(&req)
+                        .unwrap()
+                        // .body(q.to_owned())
+                        .send()
+                        .await
+                        .unwrap()
+                        .json()
+                        .await
+                        .unwrap();
 
                     answer.set(answer_resp.answer);
                     // prompt.set(Some(answer_resp.context));

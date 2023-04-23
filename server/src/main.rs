@@ -9,7 +9,7 @@ use axum::{
     Json, Router,
 };
 use miette::{Context, IntoDiagnostic, Result};
-use rusqlite::{params, Connection, Row};
+use rusqlite::{params, Connection, OptionalExtension, Row};
 use shared::{ChatRequest, ConversationResponse};
 use snakegpt::{respond_to, setup, EmbeddingConnection};
 use tower::ServiceExt;
@@ -143,7 +143,7 @@ async fn start_chat(
 
     let convo_resp = convo_resp_from_slug(&app, r.conversation_slug).unwrap();
 
-    let conversation_id = conversation_id.clone();
+    let conversation_id = conversation_id;
     tokio::spawn(async move {
         // Create a new conversation in the DB with the question
         let resp = respond_to(question.clone(), conn);
@@ -159,7 +159,7 @@ async fn start_chat(
         }
     });
 
-    Json(convo_resp)
+    Json(convo_resp.unwrap())
 }
 
 async fn get_convo(
@@ -169,19 +169,25 @@ async fn get_convo(
     Json(convo_resp_from_slug(&app, convo_slug).unwrap())
 }
 
-fn convo_resp_from_slug(app: &AppConnection, convo_slug: Uuid) -> Result<ConversationResponse> {
+fn convo_resp_from_slug(
+    app: &AppConnection,
+    convo_slug: Uuid,
+) -> Result<Option<ConversationResponse>> {
     let app = app.0.lock().unwrap();
-    let convo: (Result<String>, Result<Option<String>>) = app
+    let convo: Option<(Result<String>, Result<Option<String>>)> = app
         .query_row(
             "SELECT question, answer FROM conversations WHERE slug = ?",
             params![convo_slug.to_string()],
             |row: &Row| Ok((row.get(0).into_diagnostic(), row.get(1).into_diagnostic())),
         )
+        .optional()
         .into_diagnostic()?;
 
-    Ok(ConversationResponse {
+    let inner: Option<ConversationResponse> = convo.map(|(q, a)| ConversationResponse {
         slug: convo_slug,
-        question: convo.0.unwrap(),
-        answer: convo.1.unwrap(),
-    })
+        question: q.unwrap(),
+        answer: a.unwrap(),
+    });
+
+    Ok(inner)
 }
