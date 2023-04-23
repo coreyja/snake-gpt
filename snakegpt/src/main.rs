@@ -2,6 +2,7 @@ use std::{
     fs::File,
     io::{Bytes, Write},
     path::{Path, PathBuf},
+    sync::{Arc, Mutex},
 };
 
 use aws_sdk_s3::primitives::ByteStream;
@@ -12,7 +13,8 @@ use itertools::Itertools;
 use miette::{IntoDiagnostic, Result};
 use rusqlite::{params, Connection, OptionalExtension, Row};
 use snakegpt::{
-    fetch_embedding, setup, CompletionRequest, Config, OpenAiClient, CONCURRENT_REQUESTS, DB_NAME,
+    fetch_embedding, respond_to, setup, CompletionRequest, Config, OpenAiClient,
+    CONCURRENT_REQUESTS, DB_NAME,
 };
 use tokio::io::BufReader;
 
@@ -67,115 +69,13 @@ async fn main() -> Result<()> {
 }
 
 async fn query(args: QueryArgs) -> Result<()> {
-    let conn = setup()?;
-
-    let config = Config::from_env()?;
-    let client = config.client()?;
-
     println!("Query: {}", &args.query);
-    println!("About to fetch Embeddings for query");
 
-    let question = &args.query;
-    let embedding = fetch_embedding(&client, question).await?;
-    let embedding_json = serde_json::to_string(&embedding).into_diagnostic()?;
+    let conn = setup()?;
+    let conn = Arc::new(Mutex::new(conn));
+    let ans = respond_to(args.query.to_string(), conn).await?;
 
-    println!("Retrieved Embeddings. Finding related content");
-
-    println!("About to make VSS Table");
-    conn.execute_batch(
-        "
-        DROP TABLE IF EXISTS vss_sentences;
-        create virtual table vss_sentences using vss0(
-            embedding(1536),
-          );
-        ",
-    )
-    .into_diagnostic()?;
-
-    println!("About to populate VSS Table");
-    conn.execute(
-        "insert into vss_sentences(rowid, embedding)
-        select rowid, embedding from sentences;",
-        (),
-    )
-    .into_diagnostic()?;
-
-    println!("About to query VSS Table");
-
-    let mut st = conn
-        .prepare(
-            "select rowid, distance
-    from vss_sentences
-    where vss_search(
-      embedding,
-      vector_from_json(?1)
-    )
-    limit 5;",
-        )
-        .into_diagnostic()?;
-    let nearest_embeddings: Vec<Result<(u32, f64), _>> = st
-        .query_map(params![&embedding_json], |row| {
-            Ok((row.get(0)?, row.get(1)?))
-        })
-        .into_diagnostic()?
-        .collect_vec();
-
-    let nearest_embeddings: Vec<(String, f64)> = nearest_embeddings
-        .into_iter()
-        .map(|result| {
-            let (rowid, distance) = result.into_diagnostic()?;
-            let mut stmt = conn
-                .prepare("select text from sentences where rowid = ?1")
-                .into_diagnostic()?;
-            let text: String = stmt
-                .query_row(params![rowid], |row| row.get(0))
-                .into_diagnostic()?;
-
-            Ok((text, distance))
-        })
-        .collect::<Result<Vec<_>>>()?;
-
-    println!("Found related content, creating Prompt");
-
-    let context_strings = nearest_embeddings
-        .iter()
-        .map(|(text, _)| format!("- {}", text.trim()))
-        .join("\n");
-    let context_section = format!("### Context\n{context_strings}");
-
-    let prompt = formatdoc!(
-        "
-        You are a helpful chatbot Answering questions about Battlesnake.
-        Battlesnake is an online competitve programming game.
-        The goal of a battlesnake developer is to build a snake that can survive
-        on the board the longest.
-
-        Your job is to answer the users questions about Battlesnake as accurately as possible.
-        
-
-        Below is some context about the Users qustion. Use it to help you answer the question.
-        After the context will be dashes like this: ----
-        Below the dashes is the users question that you should answer.
-
-        Context:
-        {context_section}
-
-        --------------------------------------
-
-        {question}
-        "
-    );
-
-    if args.show_prompt {
-        println!("Prompt:\n{}", &prompt);
-    }
-
-    let completion_request = CompletionRequest::gpt_3_5_turbo(&prompt);
-    let answer = client.completion(completion_request).await?;
-
-    let first_choice = &answer.choices.first().unwrap().message.content;
-
-    println!("Answer: {}", first_choice);
+    println!("Answer: {}", ans.0);
 
     Ok(())
 }
