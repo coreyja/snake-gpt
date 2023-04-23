@@ -19,7 +19,7 @@ fn App() -> Html {
     let answer: UseStateHandle<Option<String>> = use_state(|| None);
     let prompt: UseStateHandle<Option<String>> = use_state(|| None);
 
-    let conversation_id: UseStateHandle<Uuid> = use_state(Uuid::new_v4);
+    let conversation_slug: UseStateHandle<Uuid> = use_state(Uuid::new_v4);
 
     let onsubmit = {
         let question = question.clone();
@@ -43,6 +43,7 @@ fn App() -> Html {
         let question = question.clone();
         let answer = answer.clone();
         let prompt = prompt.clone();
+        let conversation_slug = conversation_slug.clone();
 
         use_effect_with_deps(
             move |question| {
@@ -52,7 +53,7 @@ fn App() -> Html {
                     let Some(q) = question.as_ref() else {
                         return 
                     };
-                    let req = ChatRequest { question: q.to_owned() };
+                    let req = ChatRequest { question: q.to_owned(), conversation_slug: *conversation_slug };
 
                     let answer_resp: AnswerResp =
                         Request::post(&chat_api_url)
@@ -75,7 +76,7 @@ fn App() -> Html {
 
     html! {
         <div>
-            <div class="break-words">{"Conversation: "}{ *conversation_id }</div>
+            <div class="break-words">{"Conversation: "}{ *conversation_slug }</div>
             <form onsubmit={onsubmit.clone()}>
                 <div class="flex flex-cols w-100vw">
                     <textarea
