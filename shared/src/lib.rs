@@ -11,5 +11,6 @@ pub struct ChatRequest {
 pub struct ConversationResponse {
     pub slug: Uuid,
     pub question: String,
+    pub context: Option<String>,
     pub answer: Option<String>,
 }

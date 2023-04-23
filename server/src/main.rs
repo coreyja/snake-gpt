@@ -11,7 +11,7 @@ use axum::{
 use miette::{Context, IntoDiagnostic, Result};
 use rusqlite::{params, Connection, OptionalExtension, Row};
 use shared::{ChatRequest, ConversationResponse};
-use snakegpt::{respond_to, setup, EmbeddingConnection};
+use snakegpt::{get_context, respond_to_with_context, setup, EmbeddingConnection};
 use tower::ServiceExt;
 use tower_http::{
     cors::{Any, CorsLayer},
@@ -31,6 +31,7 @@ impl AppConnection {
             CREATE TABLE IF NOT EXISTS conversations (
                 slug                  TEXT NOT NULL,
                 question              TEXT NOT NULL,
+                context               TEXT,
                 answer                TEXT
             );
             CREATE UNIQUE INDEX IF NOT EXISTS uniq_index_conversations_slugs on conversations (slug);
@@ -145,9 +146,19 @@ async fn start_chat(
 
     let conversation_id = conversation_id;
     tokio::spawn(async move {
+        let (context, question) = get_context(question.clone(), conn.clone()).await.unwrap();
+        {
+            let app = app.0.lock().unwrap();
+            app.execute(
+                "UPDATE conversations SET context = ? WHERE rowid = ?",
+                params![context, conversation_id],
+            )
+            .unwrap();
+        }
+
         // Create a new conversation in the DB with the question
-        let resp = respond_to(question.clone(), conn);
-        let (answer, context) = resp.await.unwrap();
+        let resp = respond_to_with_context(context, question);
+        let (answer, _context) = resp.await.unwrap();
 
         {
             let app = app.0.lock().unwrap();
@@ -174,19 +185,30 @@ fn convo_resp_from_slug(
     convo_slug: Uuid,
 ) -> Result<Option<ConversationResponse>> {
     let app = app.0.lock().unwrap();
-    let convo: Option<(Result<String>, Result<Option<String>>)> = app
+    let convo: Option<(
+        Result<String>,
+        Result<Option<String>>,
+        Result<Option<String>>,
+    )> = app
         .query_row(
-            "SELECT question, answer FROM conversations WHERE slug = ?",
+            "SELECT question, context, answer FROM conversations WHERE slug = ?",
             params![convo_slug.to_string()],
-            |row: &Row| Ok((row.get(0).into_diagnostic(), row.get(1).into_diagnostic())),
+            |row: &Row| {
+                Ok((
+                    row.get(0).into_diagnostic(),
+                    row.get(1).into_diagnostic(),
+                    row.get(2).into_diagnostic(),
+                ))
+            },
         )
         .optional()
         .into_diagnostic()?;
 
-    let inner: Option<ConversationResponse> = convo.map(|(q, a)| ConversationResponse {
+    let inner: Option<ConversationResponse> = convo.map(|(q, c, a)| ConversationResponse {
         slug: convo_slug,
         question: q.unwrap(),
         answer: a.unwrap(),
+        context: c.unwrap(),
     });
 
     Ok(inner)

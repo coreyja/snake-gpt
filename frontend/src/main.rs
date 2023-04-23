@@ -19,14 +19,14 @@ fn App() -> Html {
     let question: UseStateHandle<Option<String>> = use_state(|| None);
 
     let answer: UseStateHandle<Option<String>> = use_state(|| None);
-    let prompt: UseStateHandle<Option<String>> = use_state(|| None);
+    let context: UseStateHandle<Option<String>> = use_state(|| None);
 
     let conversation_slug: UseStateHandle<Uuid> = use_state(Uuid::new_v4);
 
     let onsubmit = {
         let question = question.clone();
         let answer = answer.clone();
-        let prompt = prompt.clone();
+        let context = context.clone();
         let textarea_ref = textarea_ref.clone();
 
         move |e: SubmitEvent| {
@@ -35,19 +35,21 @@ fn App() -> Html {
 
             question.set(Some(value));
             answer.set(None);
-            prompt.set(None);
+            context.set(None);
 
             e.prevent_default();
         }
     };
     {
         let answer = answer.clone();
+        let context = context.clone();
         let question = question.clone();
         let conversation_slug = conversation_slug.clone();
         use_interval(
             move || {
                 let conversation_slug = conversation_slug.clone();
                 let answer = answer.clone();
+                let context = context.clone();
                 let question = question.clone();
 
                 if question.is_none() || answer.is_some() {
@@ -68,7 +70,7 @@ fn App() -> Html {
 
                     if let Some(answer_resp) = answer_resp {
                         answer.set(answer_resp.answer);
-                        // prompt.set(Some(answer_resp.context));
+                        context.set(answer_resp.context);
                     }
                 });
             },
@@ -79,11 +81,13 @@ fn App() -> Html {
     {
         let question = question.clone();
         let answer = answer.clone();
+        let context = context.clone();
         let conversation_slug = conversation_slug.clone();
 
         use_effect_with_deps(
             move |question| {
                 let question = question.clone();
+                let context = context.clone();
 
                 wasm_bindgen_futures::spawn_local(async move {
                     let Some(q) = question.as_ref() else {
@@ -106,7 +110,7 @@ fn App() -> Html {
                         .unwrap();
 
                     answer.set(answer_resp.answer);
-                    // prompt.set(Some(answer_resp.context));
+                    context.set(answer_resp.context);
                 });
             },
             question,
@@ -130,7 +134,7 @@ fn App() -> Html {
                             }}
                     />
                     <div class="shrink overflow-scroll max-h-[50vh]">
-                        if let Some(p) = prompt.as_ref() {
+                        if let Some(p) = context.as_ref() {
                             <pre class="break-words">{ p }</pre>
                         }
                     </div>

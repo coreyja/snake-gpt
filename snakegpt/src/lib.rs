@@ -28,13 +28,55 @@ pub fn setup() -> Result<Connection> {
 }
 
 pub async fn respond_to(query: String, conn: EmbeddingConnection) -> Result<(String, String)> {
+    let (context, question) = get_context(query, conn).await?;
+
+    respond_to_with_context(context, question).await
+}
+
+pub async fn respond_to_with_context(
+    context: String,
+    question: String,
+) -> Result<(String, String)> {
     let config = Config::from_env()?;
     let client = config.client()?;
 
+    let prompt = formatdoc!(
+        "
+      You are a helpful chatbot Answering questions about Battlesnake.
+      Battlesnake is an online competitve programming game.
+      The goal of a battlesnake developer is to build a snake that can survive
+      on the board the longest.
+
+      Your job is to answer the users questions about Battlesnake as accurately as possible.
+      
+
+      Below is some context about the Users qustion. Use it to help you answer the question.
+      After the context will be dashes like this: ----
+      Below the dashes is the users question that you should answer.
+
+      Context:
+      {context}
+
+      --------------------------------------
+
+      {question}
+      "
+    );
+
+    let completion_request = CompletionRequest::gpt_3_5_turbo(&prompt);
+    let answer = client.completion(completion_request).await?;
+
+    let first_choice = answer.choices.first().unwrap().message.content.clone();
+
+    Ok((first_choice, context))
+}
+
+pub async fn get_context(query: String, conn: EmbeddingConnection) -> Result<(String, String)> {
+    let config = Config::from_env()?;
+    let client = config.client()?;
     let question = &query;
     let embedding = fetch_embedding(&client, question).await?;
     let embedding_json = serde_json::to_string(&embedding).into_diagnostic()?;
-
     let nearest_embeddings = {
         let conn = conn.0.lock().unwrap();
         let mut st = conn
@@ -87,41 +129,12 @@ pub async fn respond_to(query: String, conn: EmbeddingConnection) -> Result<(Str
 
         nearest_embeddings
     };
-
     let context = nearest_embeddings
         .iter()
         .map(|(text, _)| text.trim().replace("\n\n", "\n"))
         .join("\n\n");
 
-    let prompt = formatdoc!(
-        "
-      You are a helpful chatbot Answering questions about Battlesnake.
-      Battlesnake is an online competitve programming game.
-      The goal of a battlesnake developer is to build a snake that can survive
-      on the board the longest.
-
-      Your job is to answer the users questions about Battlesnake as accurately as possible.
-      
-
-      Below is some context about the Users qustion. Use it to help you answer the question.
-      After the context will be dashes like this: ----
-      Below the dashes is the users question that you should answer.
-
-      Context:
-      {context}
-
-      --------------------------------------
-
-      {question}
-      "
-    );
-
-    let completion_request = CompletionRequest::gpt_3_5_turbo(&prompt);
-    let answer = client.completion(completion_request).await?;
-
-    let first_choice = answer.choices.first().unwrap().message.content.clone();
-
-    Ok((first_choice, context))
+    Ok((context, question.to_owned()))
 }
 
 fn load_my_extension(conn: &Connection) -> Result<()> {
