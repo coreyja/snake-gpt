@@ -11,6 +11,7 @@ use axum::{
 use miette::{IntoDiagnostic, Result};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
+use shared::{AnswerResp, ChatRequest};
 use snakegpt::{respond_to, setup, EmbeddingConnection};
 use tower::ServiceExt;
 use tower_http::{
@@ -20,17 +21,6 @@ use tower_http::{
 
 #[derive(Clone, Debug)]
 pub struct AppConnection(pub Arc<Mutex<Connection>>);
-
-#[derive(Deserialize, Serialize, Debug, Clone)]
-struct AnswerResp {
-    answer: String,
-    context: String,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone)]
-struct ChatRequest {
-    question: String,
-}
 
 #[derive(Debug, Clone)]
 struct AppState {

@@ -1,20 +1,11 @@
 use gloo_net::http::Request;
-use serde::{Deserialize, Serialize};
+use shared::{ChatRequest, AnswerResp};
 use uuid::Uuid;
 use yew::prelude::*;
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
-struct AnswerResp {
-    answer: String,
-    context: String,
-}
+
 
 const APP_URL: Option<&str> = option_env!("APP_URL");
-
-#[derive(Deserialize, Serialize, Debug, Clone)]
-struct ChatRequest {
-    question: String,
-}
 
 #[function_component]
 fn App() -> Html {
