@@ -2,13 +2,14 @@ use std::sync::{Arc, Mutex};
 
 use axum::{
     body::{boxed, Body},
-    extract::{self, State},
+    extract::{self, FromRef, State},
     http::{self, Method, StatusCode},
     response::Response,
     routing::{get, post},
     Json, Router,
 };
-use miette::Result;
+use miette::{IntoDiagnostic, Result};
+use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use snakegpt::{respond_to, setup, EmbeddingConnection};
 use tower::ServiceExt;
@@ -16,6 +17,9 @@ use tower_http::{
     cors::{Any, CorsLayer},
     services::ServeDir,
 };
+
+#[derive(Clone, Debug)]
+pub struct AppConnection(pub Arc<Mutex<Connection>>);
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 struct AnswerResp {
@@ -26,6 +30,24 @@ struct AnswerResp {
 #[derive(Deserialize, Serialize, Debug, Clone)]
 struct ChatRequest {
     question: String,
+}
+
+#[derive(Debug, Clone)]
+struct AppState {
+    embedding_connection: EmbeddingConnection,
+    app_connection: AppConnection,
+}
+
+impl FromRef<AppState> for AppConnection {
+    fn from_ref(conn: &AppState) -> Self {
+        conn.app_connection.clone()
+    }
+}
+
+impl FromRef<AppState> for EmbeddingConnection {
+    fn from_ref(conn: &AppState) -> Self {
+        conn.embedding_connection.clone()
+    }
 }
 
 #[tokio::main]
@@ -41,6 +63,13 @@ async fn main() -> Result<()> {
     let conn = Mutex::new(conn);
     let conn = Arc::new(conn);
     let conn = EmbeddingConnection(conn);
+
+    let app_conn = Connection::open_in_memory().into_diagnostic()?;
+
+    let state = AppState {
+        embedding_connection: conn,
+        app_connection: AppConnection(Arc::new(Mutex::new(app_conn))),
+    };
 
     // build our application with a single route
     let app =
@@ -58,7 +87,7 @@ async fn main() -> Result<()> {
                     },
                 ),
             )
-            .with_state(conn)
+            .with_state(state)
             .fallback_service(get(|req| async move {
                 match ServeDir::new("./dist").oneshot(req).await {
                     Ok(res) => res.map(boxed),
