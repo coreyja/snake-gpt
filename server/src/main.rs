@@ -10,7 +10,7 @@ use axum::{
 };
 use miette::{Context, IntoDiagnostic, Result};
 use rusqlite::{params, Connection, Row};
-use shared::{AnswerResp, ChatRequest, ConversationResponse};
+use shared::{ChatRequest, ConversationResponse};
 use snakegpt::{respond_to, setup, EmbeddingConnection};
 use tower::ServiceExt;
 use tower_http::{
@@ -128,7 +128,7 @@ async fn start_chat(
     State(conn): State<EmbeddingConnection>,
     State(app): State<AppConnection>,
     extract::Json(r): Json<ChatRequest>,
-) -> impl IntoResponse {
+) -> Json<ConversationResponse> {
     let question = r.question;
 
     let conversation_id = {
@@ -141,26 +141,35 @@ async fn start_chat(
         .unwrap()
     };
 
-    // Create a new conversation in the DB with the question
-    let resp = respond_to(question.clone(), conn);
-    let (answer, context) = resp.await.unwrap();
+    let convo_resp = convo_resp_from_slug(&app, r.conversation_slug).unwrap();
 
-    {
-        let app = app.0.lock().unwrap();
-        app.execute(
-            "UPDATE conversations SET answer = ? WHERE rowid = ?",
-            params![answer, conversation_id],
-        )
-        .unwrap();
-    }
+    let conversation_id = conversation_id.clone();
+    tokio::spawn(async move {
+        // Create a new conversation in the DB with the question
+        let resp = respond_to(question.clone(), conn);
+        let (answer, context) = resp.await.unwrap();
 
-    Json(AnswerResp { answer, context })
+        {
+            let app = app.0.lock().unwrap();
+            app.execute(
+                "UPDATE conversations SET answer = ? WHERE rowid = ?",
+                params![answer, conversation_id],
+            )
+            .unwrap();
+        }
+    });
+
+    Json(convo_resp)
 }
 
 async fn get_convo(
     State(app): State<AppConnection>,
     Path(convo_slug): Path<Uuid>,
 ) -> impl IntoResponse {
+    Json(convo_resp_from_slug(&app, convo_slug).unwrap())
+}
+
+fn convo_resp_from_slug(app: &AppConnection, convo_slug: Uuid) -> Result<ConversationResponse> {
     let app = app.0.lock().unwrap();
     let convo: (Result<String>, Result<Option<String>>) = app
         .query_row(
@@ -168,9 +177,9 @@ async fn get_convo(
             params![convo_slug.to_string()],
             |row: &Row| Ok((row.get(0).into_diagnostic(), row.get(1).into_diagnostic())),
         )
-        .unwrap();
+        .into_diagnostic()?;
 
-    Json(ConversationResponse {
+    Ok(ConversationResponse {
         slug: convo_slug,
         question: convo.0.unwrap(),
         answer: convo.1.unwrap(),

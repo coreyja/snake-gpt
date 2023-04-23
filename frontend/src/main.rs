@@ -1,5 +1,5 @@
 use gloo_net::http::Request;
-use shared::{ChatRequest, AnswerResp};
+use shared::{ChatRequest, ConversationResponse};
 use uuid::Uuid;
 use yew::prelude::*;
 
@@ -55,7 +55,7 @@ fn App() -> Html {
                     };
                     let req = ChatRequest { question: q.to_owned(), conversation_slug: *conversation_slug };
 
-                    let answer_resp: AnswerResp =
+                    let answer_resp: ConversationResponse =
                         Request::post(&chat_api_url)
                             .json(&req).unwrap()
                             // .body(q.to_owned())
@@ -66,8 +66,8 @@ fn App() -> Html {
                             .await
                             .unwrap();
 
-                    answer.set(Some(answer_resp.answer));
-                    prompt.set(Some(answer_resp.context));
+                    answer.set(answer_resp.answer);
+                    // prompt.set(Some(answer_resp.context));
                 });
             },
             question,
