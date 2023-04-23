@@ -185,31 +185,21 @@ fn convo_resp_from_slug(
     convo_slug: Uuid,
 ) -> Result<Option<ConversationResponse>> {
     let app = app.0.lock().unwrap();
-    let convo: Option<(
-        Result<String>,
-        Result<Option<String>>,
-        Result<Option<String>>,
-    )> = app
+    let convo: Option<ConversationResponse> = app
         .query_row(
             "SELECT question, context, answer FROM conversations WHERE slug = ?",
             params![convo_slug.to_string()],
             |row: &Row| {
-                Ok((
-                    row.get(0).into_diagnostic(),
-                    row.get(1).into_diagnostic(),
-                    row.get(2).into_diagnostic(),
-                ))
+                Ok(ConversationResponse {
+                    slug: convo_slug,
+                    question: row.get(0)?,
+                    answer: row.get(1)?,
+                    context: row.get(2)?,
+                })
             },
         )
         .optional()
         .into_diagnostic()?;
 
-    let inner: Option<ConversationResponse> = convo.map(|(q, c, a)| ConversationResponse {
-        slug: convo_slug,
-        question: q.unwrap(),
-        answer: a.unwrap(),
-        context: c.unwrap(),
-    });
-
-    Ok(inner)
+    Ok(convo)
 }
