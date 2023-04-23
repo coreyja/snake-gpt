@@ -1,6 +1,6 @@
 use std::{
     fs::File,
-    io::{Write},
+    io::Write,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
@@ -13,10 +13,9 @@ use itertools::Itertools;
 use miette::{IntoDiagnostic, Result};
 use rusqlite::{params, Connection, OptionalExtension, Row};
 use snakegpt::{
-    fetch_embedding, respond_to, setup, Config, OpenAiClient,
+    fetch_embedding, respond_to, setup, Config, EmbeddingConnection, OpenAiClient,
     CONCURRENT_REQUESTS, DB_NAME,
 };
-
 
 #[derive(Args, Debug)]
 
@@ -73,6 +72,7 @@ async fn query(args: QueryArgs) -> Result<()> {
 
     let conn = setup()?;
     let conn = Arc::new(Mutex::new(conn));
+    let conn = EmbeddingConnection(conn);
     let ans = respond_to(args.query.to_string(), conn).await?;
 
     println!("Answer: {}", ans.0);

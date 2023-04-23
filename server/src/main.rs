@@ -9,9 +9,8 @@ use axum::{
     Json, Router,
 };
 use miette::Result;
-use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
-use snakegpt::{respond_to, setup};
+use snakegpt::{respond_to, setup, EmbeddingConnection};
 use tower::ServiceExt;
 use tower_http::{
     cors::{Any, CorsLayer},
@@ -41,33 +40,35 @@ async fn main() -> Result<()> {
     let conn = setup()?;
     let conn = Mutex::new(conn);
     let conn = Arc::new(conn);
+    let conn = EmbeddingConnection(conn);
 
     // build our application with a single route
-    let app = Router::new()
-        .route(
-            "/api/v0/chat",
-            post(
-                |State(conn): State<Arc<Mutex<Connection>>>,
-                 extract::Json(r): Json<ChatRequest>| async {
-                    let question = r.question;
-                    let resp = respond_to(question.clone(), conn);
-                    let (answer, context) = resp.await.unwrap();
+    let app =
+        Router::new()
+            .route(
+                "/api/v0/chat",
+                post(
+                    |State(conn): State<EmbeddingConnection>,
+                     extract::Json(r): Json<ChatRequest>| async {
+                        let question = r.question;
+                        let resp = respond_to(question.clone(), conn);
+                        let (answer, context) = resp.await.unwrap();
 
-                    Json(AnswerResp { answer, context })
-                },
-            ),
-        )
-        .with_state(conn)
-        .fallback_service(get(|req| async move {
-            match ServeDir::new("./dist").oneshot(req).await {
-                Ok(res) => res.map(boxed),
-                Err(err) => Response::builder()
-                    .status(StatusCode::INTERNAL_SERVER_ERROR)
-                    .body(boxed(Body::from(format!("error: {err}"))))
-                    .expect("error response"),
-            }
-        }))
-        .layer(cors);
+                        Json(AnswerResp { answer, context })
+                    },
+                ),
+            )
+            .with_state(conn)
+            .fallback_service(get(|req| async move {
+                match ServeDir::new("./dist").oneshot(req).await {
+                    Ok(res) => res.map(boxed),
+                    Err(err) => Response::builder()
+                        .status(StatusCode::INTERNAL_SERVER_ERROR)
+                        .body(boxed(Body::from(format!("error: {err}"))))
+                        .expect("error response"),
+                }
+            }))
+            .layer(cors);
 
     // run it with hyper on localhost:3000
     axum::Server::bind(&"0.0.0.0:3000".parse().unwrap())

@@ -1,9 +1,6 @@
-
-use futures::{StreamExt};
 use indoc::formatdoc;
 use itertools::Itertools;
 use std::sync::{Arc, Mutex};
-
 
 use miette::{IntoDiagnostic, Result};
 use openai::{embeddings::EmbeddingsRequest, Client};
@@ -20,6 +17,9 @@ static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_P
 pub const CONCURRENT_REQUESTS: usize = 5;
 pub const DB_NAME: &str = "sample.v0.db";
 
+#[derive(Clone, Debug)]
+pub struct EmbeddingConnection(pub Arc<Mutex<Connection>>);
+
 pub fn setup() -> Result<Connection> {
     let conn = Connection::open(DB_NAME).into_diagnostic()?;
     load_my_extension(&conn)?;
@@ -27,7 +27,7 @@ pub fn setup() -> Result<Connection> {
     Ok(conn)
 }
 
-pub async fn respond_to(query: String, conn: Arc<Mutex<Connection>>) -> Result<(String, String)> {
+pub async fn respond_to(query: String, conn: EmbeddingConnection) -> Result<(String, String)> {
     let config = Config::from_env()?;
     let client = config.client()?;
 
@@ -36,7 +36,7 @@ pub async fn respond_to(query: String, conn: Arc<Mutex<Connection>>) -> Result<(
     let embedding_json = serde_json::to_string(&embedding).into_diagnostic()?;
 
     let nearest_embeddings = {
-        let conn = conn.lock().unwrap();
+        let conn = conn.0.lock().unwrap();
         let mut st = conn
             .prepare(
                 "select rowid, distance
