@@ -1,5 +1,6 @@
 use gloo_net::http::Request;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 use yew::prelude::*;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -26,6 +27,8 @@ fn App() -> Html {
 
     let answer: UseStateHandle<Option<String>> = use_state(|| None);
     let prompt: UseStateHandle<Option<String>> = use_state(|| None);
+
+    let conversation_id: UseStateHandle<Uuid> = use_state(Uuid::new_v4);
 
     let onsubmit = {
         let question = question.clone();
@@ -81,6 +84,7 @@ fn App() -> Html {
 
     html! {
         <div>
+            <div class="break-words">{"Conversation: "}{ *conversation_id }</div>
             <form onsubmit={onsubmit.clone()}>
                 <div class="flex flex-cols w-100vw">
                     <textarea

@@ -10,6 +10,7 @@
 - [ ] Add 'model' layer to be able to test different strategies
   - Current model is one. ReAct model will be seperate
 - [ ] Make UI look a bit more chat like
+- [ ] Make sure to flush old convos from the in Mem DB
 
 ## Stream April 16th TODO
 
