@@ -1,13 +1,13 @@
-use clap::{Args, Parser, Subcommand};
-use futures::{stream, StreamExt};
+
+use futures::{StreamExt};
 use indoc::formatdoc;
 use itertools::Itertools;
 use std::sync::{Arc, Mutex};
-use std::{os::unix::prelude::PermissionsExt, path::PathBuf};
+
 
 use miette::{IntoDiagnostic, Result};
 use openai::{embeddings::EmbeddingsRequest, Client};
-use rusqlite::{params, Connection, Row};
+use rusqlite::{params, Connection};
 
 pub use crate::openai::completion::CompletionRequest;
 pub use crate::openai::{Client as OpenAiClient, Config};

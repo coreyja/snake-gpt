@@ -1,6 +1,6 @@
 use std::{
     fs::File,
-    io::{Bytes, Write},
+    io::{Write},
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
@@ -8,15 +8,15 @@ use std::{
 use aws_sdk_s3::primitives::ByteStream;
 use clap::*;
 use futures::{stream, StreamExt};
-use indoc::formatdoc;
+
 use itertools::Itertools;
 use miette::{IntoDiagnostic, Result};
 use rusqlite::{params, Connection, OptionalExtension, Row};
 use snakegpt::{
-    fetch_embedding, respond_to, setup, CompletionRequest, Config, OpenAiClient,
+    fetch_embedding, respond_to, setup, Config, OpenAiClient,
     CONCURRENT_REQUESTS, DB_NAME,
 };
-use tokio::io::BufReader;
+
 
 #[derive(Args, Debug)]
 
