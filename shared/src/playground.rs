@@ -54,10 +54,17 @@ where
                 Self::API_START_CHAT_ROUTE,
                 Some(body),
             )
-            .await?
-            .unwrap();
-        let resp = serde_json::from_value(resp)?;
-        Ok(resp)
+            .await?;
+        match resp {
+            Ok(resp) => {
+                let resp = serde_json::from_value(resp)?;
+                Ok(resp)
+            }
+            Err(resp) => {
+                let resp = serde_json::from_value(resp)?;
+                Err(ClientError::Api(resp))
+            }
+        }
     }
 
     async fn get_conversation(
