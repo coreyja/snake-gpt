@@ -71,6 +71,10 @@ impl Api for AxumRoutable {
         &self,
         conversation_slug: String,
     ) -> Result<ConversationResponse, Self::ErrorWrapper<ConversationError>> {
-        todo!()
+        Ok(
+            convo_resp_from_slug(&self.app, conversation_slug.parse().unwrap())
+                .map(|x| x.unwrap())
+                .unwrap(),
+        )
     }
 }

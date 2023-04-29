@@ -1,18 +1,19 @@
 use std::fmt::Debug;
 
 use super::*;
+
 pub trait Api {
     type ErrorWrapper<T: for<'a> Deserialize<'a> + Debug>;
 
-    const API_START_CHAT_ROUTE: &'static str = "/v0/chat";
-    const API_START_CHAT_METHOD: &'static str = "post";
+    const START_CHAT_ROUTE: &'static str = "/v0/chat";
+    const START_CHAT_METHOD: &'static str = "post";
     async fn start_chat(
         &self,
         body: ChatRequest,
     ) -> Result<ConversationResponse, Self::ErrorWrapper<ConversationError>>;
 
-    const API_GET_CONVERSATION_ROUTE: &'static str = "/v0/conversations/{conversation_slug}";
-    const API_GET_CONVERSATION_METHOD: &'static str = "get";
+    const GET_CONVERSATION_ROUTE: &'static str = "/v0/conversations/{conversation_slug}";
+    const GET_CONVERSATION_METHOD: &'static str = "get";
     async fn get_conversation(
         &self,
         conversation_slug: String,
@@ -42,12 +43,12 @@ where
         &self,
         body: ChatRequest,
     ) -> Result<ConversationResponse, Self::ErrorWrapper<ConversationError>> {
-        let route = Self::API_START_CHAT_ROUTE;
+        let route = Self::START_CHAT_ROUTE;
 
         let body = serde_json::to_value(body).map_err(ClientError::Serialization)?;
         let body = Some(body);
         let resp = self
-            .send_request(route, Self::API_START_CHAT_ROUTE, body)
+            .send_request(route, Self::START_CHAT_ROUTE, body)
             .await
             .map_err(ClientError::Transport)?;
         match resp {
@@ -66,12 +67,12 @@ where
         &self,
         conversation_slug: String,
     ) -> Result<ConversationResponse, Self::ErrorWrapper<ConversationError>> {
-        let route = Self::API_GET_CONVERSATION_ROUTE;
+        let route = Self::GET_CONVERSATION_ROUTE;
         let route = route.replace("{conversation_slug}", &conversation_slug);
 
         let body = None;
         let resp = self
-            .send_request(Self::API_GET_CONVERSATION_METHOD, &route, body)
+            .send_request(Self::GET_CONVERSATION_METHOD, &route, body)
             .await
             .map_err(ClientError::Transport)?;
         match resp {
