@@ -18,4 +18,4 @@ pub struct ConversationResponse {
 #[derive(Deserialize, Debug)]
 pub struct ConversationError;
 
-mod playground;
+pub mod playground;

@@ -8,6 +8,8 @@ use yew_hooks::use_interval;
 
 const APP_URL: Option<&str> = option_env!("APP_URL");
 
+mod rpc;
+
 #[function_component]
 fn App() -> Html {
     let app_url = APP_URL.unwrap_or("http://localhost:3000");
