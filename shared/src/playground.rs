@@ -87,11 +87,6 @@ where
     }
 }
 
-#[derive(Error, Debug)]
-#[error("oops!")]
-// #[diagnostic()]
-struct GlooErrorStandin;
-
 use miette::Diagnostic;
 use thiserror::Error;
 
