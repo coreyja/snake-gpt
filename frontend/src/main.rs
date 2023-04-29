@@ -13,8 +13,9 @@ mod rpc;
 #[function_component]
 fn App() -> Html {
     let app_url = APP_URL.unwrap_or("http://localhost:3000").to_string();
+    let api_url = format!("{}/api", app_url);
 
-    let client = rpc::Client::new(Some(app_url));
+    let client = rpc::Client::new(Some(api_url));
     let client = Arc::new(client);
 
     let textarea_ref = use_node_ref();
