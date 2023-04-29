@@ -113,3 +113,16 @@ where
     #[error("Api Error")]
     Api(ApiError),
 }
+
+#[derive(Error, Diagnostic, Debug)]
+pub enum ServerError<InternalError>
+where
+    InternalError: std::fmt::Debug,
+{
+    #[error(transparent)]
+    Deserialization(serde_json::Error),
+    #[error(transparent)]
+    Serialization(serde_json::Error),
+    #[error("Internal Error")]
+    Api(InternalError),
+}

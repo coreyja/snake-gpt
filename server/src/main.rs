@@ -10,7 +10,7 @@ use axum::{
 };
 use miette::{Context, IntoDiagnostic, Result};
 use rusqlite::{params, Connection, OptionalExtension, Row};
-use shared::{ChatRequest, ConversationResponse};
+use shared::{playground::Api, ChatRequest, ConversationResponse};
 use snakegpt::{get_context, respond_to_with_context, setup, EmbeddingConnection};
 use tower::ServiceExt;
 use tower_http::{
@@ -18,6 +18,8 @@ use tower_http::{
     services::ServeDir,
 };
 use uuid::Uuid;
+
+pub mod rpc;
 
 #[derive(Clone, Debug)]
 pub struct AppConnection(pub Arc<Mutex<Connection>>);
@@ -100,9 +102,31 @@ async fn main() -> Result<()> {
         app_connection: app_conn,
     };
 
+    #[axum_macros::debug_handler(state = AppState)]
+    async fn start_chat_inner(
+        State(conn): State<EmbeddingConnection>,
+        State(app): State<AppConnection>,
+        extract::Json(r): Json<ChatRequest>,
+    ) -> Response {
+        let rpc = rpc::AxumRoutable {
+            app,
+            embedding: conn,
+        };
+
+        let resp = rpc.start_chat(r).await;
+
+        match resp {
+            Ok(resp) => Json(resp).into_response(),
+            Err(err) => Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(boxed(Body::from(format!("error: {err}"))))
+                .unwrap(),
+        }
+    }
+
     // build our application with a single route
     let app = Router::new()
-        .route("/api/v0/chat", post(start_chat))
+        .route("/api/v0/chat", post(start_chat_inner))
         .route("/api/v0/conversations/:slug", get(get_convo))
         .with_state(state)
         .fallback_service(get(|req| async move {
