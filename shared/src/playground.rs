@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use super::*;
 
 #[async_trait::async_trait(?Send)]
-trait Api {
+pub trait Api {
     type ErrorWrapper<T: for<'a> Deserialize<'a> + Debug>;
 
     const API_START_CHAT_ROUTE: &'static str = "/v0/chat";
@@ -99,7 +99,7 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 #[derive(Error, Diagnostic, Debug)]
-enum ClientError<ApiError, TransportError>
+pub enum ClientError<ApiError, TransportError>
 where
     ApiError: std::fmt::Debug,
     TransportError: std::fmt::Debug + std::error::Error,

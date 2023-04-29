@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use gloo_net::http::Request;
-use shared::{ChatRequest, ConversationResponse};
+use shared::{playground::Api, ChatRequest, ConversationResponse};
 use uuid::Uuid;
 use yew::prelude::*;
 use yew_hooks::use_interval;
@@ -12,10 +12,11 @@ mod rpc;
 
 #[function_component]
 fn App() -> Html {
-    let app_url = APP_URL.unwrap_or("http://localhost:3000");
+    let app_url = APP_URL.unwrap_or("http://localhost:3000").to_string();
 
-    let chat_api_url = format!("{app_url}/api/v0/chat");
-    let chat_api_url = Arc::new(chat_api_url);
+    let client = rpc::Client::new(Some(app_url));
+    let client = Arc::new(client);
+
     let textarea_ref = use_node_ref();
 
     let question: UseStateHandle<Option<String>> = use_state(|| None);
@@ -42,38 +43,33 @@ fn App() -> Html {
             e.prevent_default();
         }
     };
+
     {
         let answer = answer.clone();
         let context = context.clone();
         let question = question.clone();
         let conversation_slug = conversation_slug.clone();
+        let client = client.clone();
         use_interval(
             move || {
                 let conversation_slug = conversation_slug.clone();
                 let answer = answer.clone();
                 let context = context.clone();
                 let question = question.clone();
+                let client = client.clone();
 
                 if question.is_none() || answer.is_some() {
                     return;
                 }
 
                 wasm_bindgen_futures::spawn_local(async move {
-                    let answer_resp: Option<ConversationResponse> = Request::get(&format!(
-                        "{app_url}/api/v0/conversations/{conversation_slug}",
-                        conversation_slug = *conversation_slug,
-                    ))
-                    .send()
-                    .await
-                    .unwrap()
-                    .json()
-                    .await
-                    .unwrap();
+                    let answer_resp = client
+                        .get_conversation(conversation_slug.to_string())
+                        .await
+                        .unwrap();
 
-                    if let Some(answer_resp) = answer_resp {
-                        answer.set(answer_resp.answer);
-                        context.set(answer_resp.context);
-                    }
+                    answer.set(answer_resp.answer);
+                    context.set(answer_resp.context);
                 });
             },
             1000,
@@ -85,11 +81,13 @@ fn App() -> Html {
         let answer = answer.clone();
         let context = context.clone();
         let conversation_slug = conversation_slug.clone();
+        let client = client.clone();
 
         use_effect_with_deps(
             move |question| {
                 let question = question.clone();
                 let context = context.clone();
+                let client = client.clone();
 
                 wasm_bindgen_futures::spawn_local(async move {
                     let Some(q) = question.as_ref() else {
@@ -100,16 +98,7 @@ fn App() -> Html {
                         conversation_slug: *conversation_slug,
                     };
 
-                    let answer_resp: ConversationResponse = Request::post(&chat_api_url)
-                        .json(&req)
-                        .unwrap()
-                        // .body(q.to_owned())
-                        .send()
-                        .await
-                        .unwrap()
-                        .json()
-                        .await
-                        .unwrap();
+                    let answer_resp = client.start_chat(req).await.unwrap();
 
                     answer.set(answer_resp.answer);
                     context.set(answer_resp.context);

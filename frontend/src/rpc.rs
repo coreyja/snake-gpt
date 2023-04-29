@@ -1,7 +1,16 @@
 use gloo_net::http::{Method, Request};
 use shared::playground::ClientTransport;
 
-struct Client;
+#[derive(Debug, Default)]
+pub struct Client {
+    pub base_url: Option<String>,
+}
+
+impl Client {
+    pub fn new(base_url: Option<String>) -> Self {
+        Self { base_url }
+    }
+}
 
 #[async_trait::async_trait(?Send)]
 impl ClientTransport for Client {
@@ -25,14 +34,21 @@ impl ClientTransport for Client {
             method
         };
 
-        let req = if let Some(body) = body {
-            Request::new(route).method(method).json(&body)?
+        let url = if let Some(base_url) = &self.base_url {
+            format!("{}{}", base_url, route)
         } else {
-            Request::new(route).method(method)
+            route.to_string()
+        };
+
+        let req = Request::new(&url).method(method);
+
+        let req = if let Some(body) = body {
+            req.json(&body)?
+        } else {
+            req
         };
 
         let resp = req.send().await?;
-
         let json = resp.json().await?;
 
         if resp.status() == 200 {

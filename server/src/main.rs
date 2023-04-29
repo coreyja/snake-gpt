@@ -77,7 +77,7 @@ async fn main() -> Result<()> {
     let cors = CorsLayer::new()
         // allow `GET` and `POST` when accessing the resource
         .allow_methods([Method::GET, Method::POST])
-        .allow_headers(vec![http::header::CONTENT_TYPE])
+        .allow_headers([http::header::CONTENT_TYPE])
         // allow requests from any origin
         .allow_origin(Any);
 
