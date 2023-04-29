@@ -42,13 +42,12 @@ where
         &self,
         body: ChatRequest,
     ) -> Result<ConversationResponse, Self::ErrorWrapper<ConversationError>> {
+        let route = Self::API_START_CHAT_ROUTE;
+
         let body = serde_json::to_value(body).map_err(ClientError::Serialization)?;
+        let body = Some(body);
         let resp = self
-            .send_request(
-                Self::API_START_CHAT_METHOD,
-                Self::API_START_CHAT_ROUTE,
-                Some(body),
-            )
+            .send_request(route, Self::API_START_CHAT_ROUTE, body)
             .await
             .map_err(ClientError::Transport)?;
         match resp {
@@ -67,10 +66,12 @@ where
         &self,
         conversation_slug: String,
     ) -> Result<ConversationResponse, Self::ErrorWrapper<ConversationError>> {
-        let route =
-            Self::API_GET_CONVERSATION_ROUTE.replace("{conversation_slug}", &conversation_slug);
+        let route = Self::API_GET_CONVERSATION_ROUTE;
+        let route = route.replace("{conversation_slug}", &conversation_slug);
+
+        let body = None;
         let resp = self
-            .send_request(Self::API_GET_CONVERSATION_METHOD, &route, None)
+            .send_request(Self::API_GET_CONVERSATION_METHOD, &route, body)
             .await
             .map_err(ClientError::Transport)?;
         match resp {
