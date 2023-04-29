@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
-use gloo_net::http::Request;
-use shared::{playground::Api, ChatRequest, ConversationResponse};
+use shared::{playground::Api, ChatRequest};
 use uuid::Uuid;
 use yew::prelude::*;
 use yew_hooks::use_interval;
@@ -82,7 +81,6 @@ fn App() -> Html {
         let answer = answer.clone();
         let context = context.clone();
         let conversation_slug = conversation_slug.clone();
-        let client = client.clone();
 
         use_effect_with_deps(
             move |question| {
