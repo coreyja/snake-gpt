@@ -12,7 +12,6 @@ pub struct AxumRoutable {
     pub embedding: EmbeddingConnection,
 }
 
-#[async_trait::async_trait(?Send)]
 impl Api for AxumRoutable {
     type ErrorWrapper<InnerError: std::fmt::Debug + for<'a> serde::Deserialize<'a>> =
         ServerError<InnerError>;

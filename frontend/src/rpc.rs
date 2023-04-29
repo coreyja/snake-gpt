@@ -12,7 +12,6 @@ impl Client {
     }
 }
 
-#[async_trait::async_trait(?Send)]
 impl ClientTransport for Client {
     type Error = gloo_net::Error;
 

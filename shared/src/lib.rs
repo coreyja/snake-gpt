@@ -1,3 +1,5 @@
+#![feature(async_fn_in_trait)]
+
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
