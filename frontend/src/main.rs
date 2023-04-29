@@ -1,36 +1,32 @@
-use gloo_net::http::Request;
-use serde::{Deserialize, Serialize};
-use yew::prelude::*;
+use std::sync::Arc;
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
-struct AnswerResp {
-    answer: String,
-    context: String,
-}
+use gloo_net::http::Request;
+use shared::{ChatRequest, ConversationResponse};
+use uuid::Uuid;
+use yew::prelude::*;
+use yew_hooks::use_interval;
 
 const APP_URL: Option<&str> = option_env!("APP_URL");
-
-#[derive(Deserialize, Serialize, Debug, Clone)]
-struct ChatRequest {
-    question: String,
-}
 
 #[function_component]
 fn App() -> Html {
     let app_url = APP_URL.unwrap_or("http://localhost:3000");
 
     let chat_api_url = format!("{app_url}/api/v0/chat");
+    let chat_api_url = Arc::new(chat_api_url);
     let textarea_ref = use_node_ref();
 
     let question: UseStateHandle<Option<String>> = use_state(|| None);
 
     let answer: UseStateHandle<Option<String>> = use_state(|| None);
-    let prompt: UseStateHandle<Option<String>> = use_state(|| None);
+    let context: UseStateHandle<Option<String>> = use_state(|| None);
+
+    let conversation_slug: UseStateHandle<Uuid> = use_state(Uuid::new_v4);
 
     let onsubmit = {
         let question = question.clone();
         let answer = answer.clone();
-        let prompt = prompt.clone();
+        let context = context.clone();
         let textarea_ref = textarea_ref.clone();
 
         move |e: SubmitEvent| {
@@ -39,40 +35,82 @@ fn App() -> Html {
 
             question.set(Some(value));
             answer.set(None);
-            prompt.set(None);
+            context.set(None);
 
             e.prevent_default();
         }
     };
+    {
+        let answer = answer.clone();
+        let context = context.clone();
+        let question = question.clone();
+        let conversation_slug = conversation_slug.clone();
+        use_interval(
+            move || {
+                let conversation_slug = conversation_slug.clone();
+                let answer = answer.clone();
+                let context = context.clone();
+                let question = question.clone();
+
+                if question.is_none() || answer.is_some() {
+                    return;
+                }
+
+                wasm_bindgen_futures::spawn_local(async move {
+                    let answer_resp: Option<ConversationResponse> = Request::get(&format!(
+                        "{app_url}/api/v0/conversations/{conversation_slug}",
+                        conversation_slug = *conversation_slug,
+                    ))
+                    .send()
+                    .await
+                    .unwrap()
+                    .json()
+                    .await
+                    .unwrap();
+
+                    if let Some(answer_resp) = answer_resp {
+                        answer.set(answer_resp.answer);
+                        context.set(answer_resp.context);
+                    }
+                });
+            },
+            1000,
+        );
+    }
 
     {
         let question = question.clone();
         let answer = answer.clone();
-        let prompt = prompt.clone();
+        let context = context.clone();
+        let conversation_slug = conversation_slug.clone();
 
         use_effect_with_deps(
             move |question| {
                 let question = question.clone();
+                let context = context.clone();
 
                 wasm_bindgen_futures::spawn_local(async move {
                     let Some(q) = question.as_ref() else {
-                        return 
+                        return
                     };
-                    let req = ChatRequest { question: q.to_owned() };
+                    let req = ChatRequest {
+                        question: q.to_owned(),
+                        conversation_slug: *conversation_slug,
+                    };
 
-                    let answer_resp: AnswerResp =
-                        Request::post(&chat_api_url)
-                            .json(&req).unwrap()
-                            // .body(q.to_owned())
-                            .send()
-                            .await
-                            .unwrap()
-                            .json()
-                            .await
-                            .unwrap();
+                    let answer_resp: ConversationResponse = Request::post(&chat_api_url)
+                        .json(&req)
+                        .unwrap()
+                        // .body(q.to_owned())
+                        .send()
+                        .await
+                        .unwrap()
+                        .json()
+                        .await
+                        .unwrap();
 
-                    answer.set(Some(answer_resp.answer));
-                    prompt.set(Some(answer_resp.context));
+                    answer.set(answer_resp.answer);
+                    context.set(answer_resp.context);
                 });
             },
             question,
@@ -81,6 +119,7 @@ fn App() -> Html {
 
     html! {
         <div>
+            <div class="break-words">{"Conversation: "}{ *conversation_slug }</div>
             <form onsubmit={onsubmit.clone()}>
                 <div class="flex flex-cols w-100vw">
                     <textarea
@@ -95,7 +134,7 @@ fn App() -> Html {
                             }}
                     />
                     <div class="shrink overflow-scroll max-h-[50vh]">
-                        if let Some(p) = prompt.as_ref() {
+                        if let Some(p) = context.as_ref() {
                             <pre class="break-words">{ p }</pre>
                         }
                     </div>
