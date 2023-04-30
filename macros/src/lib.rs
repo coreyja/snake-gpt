@@ -1,4 +1,5 @@
 use darling::FromMeta;
+use proc_macro2::Ident;
 use quote::ToTokens;
 use regex::Regex;
 use syn::{parse2, parse_macro_input};
@@ -84,14 +85,25 @@ fn rpc_inner(
             quote::quote! { let body = None; }
         };
 
+        let route_hash_inserts = route_attrs.iter().map(|x| {
+            let ident = Ident::new(x, proc_macro2::Span::call_site());
+
+            quote::quote! { vars.insert(#x.to_string(), #ident); }
+        });
+
         function_copy.default = Some(
             parse2(quote::quote! { {
                 let method = #method;
                 let route = #route;
 
+                let mut vars = std::collections::HashMap::<String, String>::new();
+                #(#route_hash_inserts)*
+                let vars = vars;
+                let route = strfmt::strfmt(&route, &vars).unwrap();
+
                 #body_block
                 let resp = self
-                    .send_request(method, route, body)
+                    .send_request(method, &route, body)
                     .await
                     .map_err(ClientError::Transport)?;
 
