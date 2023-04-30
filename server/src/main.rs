@@ -177,7 +177,7 @@ pub fn convo_resp_from_slug(
     let app = app.0.lock().unwrap();
     let convo: Option<ConversationResponse> = app
         .query_row(
-            "SELECT question, context, answer FROM conversations WHERE slug = ?",
+            "SELECT question, answer, context FROM conversations WHERE slug = ?",
             params![convo_slug.to_string()],
             |row: &Row| {
                 Ok(ConversationResponse {
