@@ -4,6 +4,7 @@ members = [
   "frontend",
   "server",
   "shared",
+  "macros",
 ]
 
 [workspace.dependencies]
