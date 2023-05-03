@@ -1,18 +1,24 @@
 #![feature(async_fn_in_trait)]
 
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 use axum::{
     body::{boxed, Body},
     extract::{self, FromRef, Path, State},
     http::{self, Method, StatusCode},
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{any, get, post},
     Json, Router,
 };
 use miette::{Context, IntoDiagnostic, Result};
 use rusqlite::{params, Connection, OptionalExtension, Row};
-use shared::{playground::Api, ChatRequest, ConversationResponse};
+use shared::{
+    playground::{api_routes, Api},
+    ChatRequest, ConversationResponse,
+};
 use snakegpt::{get_context, respond_to_with_context, setup, EmbeddingConnection};
 use tower::ServiceExt;
 use tower_http::{
@@ -146,9 +152,39 @@ async fn main() -> Result<()> {
     }
 
     // build our application with a single route
-    let app = Router::new()
-        .route("/api/v0/chat", post(start_chat_inner))
-        .route("/api/v0/conversations/:slug", get(get_convo_inner))
+    let mut app = Router::new();
+
+    let api_routes = api_routes();
+
+    for r in api_routes {
+        let wrapper = match r.method {
+            "get" => get,
+            "post" => post,
+            _ => panic!("Unknown method {}", r.method),
+        };
+        dbg!(&r);
+        app = app.route(
+            r.route,
+            wrapper(
+                |State(app): State<AppConnection>,
+                 State(embedding): State<EmbeddingConnection>,
+                 Path(params): Path<HashMap<String, String>>,
+                 uri: axum::http::Uri| async move {
+                    let rpc = rpc::AxumRoutable { app, embedding };
+
+                    // rpc.call(r, params).await.map_err(|e| {
+                    //     eprintln!("Error: {}", e);
+                    //     e
+                    // })
+                    todo!("Got stuck here....")
+                },
+            ),
+        );
+    }
+
+    let app = app
+        // .route("/api/v0/chat", post(start_chat_inner))
+        // .route("/api/v0/conversations/:slug", get(get_convo_inner))
         .with_state(state)
         .fallback_service(get(|req| async move {
             match ServeDir::new("./dist").oneshot(req).await {

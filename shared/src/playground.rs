@@ -6,23 +6,43 @@ use super::*;
 pub trait Api {
     type ErrorWrapper<T: for<'a> Deserialize<'a> + Debug>;
 
-    const START_CHAT_ROUTE: &'static str = "/v0/chat";
-    const START_CHAT_METHOD: &'static str = "post";
-
     #[rpc(route = "/v0/chat", method = "post")]
     async fn start_chat(
         &self,
         body: ChatRequest,
     ) -> Result<ConversationResponse, Self::ErrorWrapper<ConversationError>>;
 
-    const GET_CONVERSATION_ROUTE: &'static str = "/v0/conversations/{conversation_slug}";
-    const GET_CONVERSATION_METHOD: &'static str = "get";
-
     #[rpc(route = "/v0/conversations/{conversation_slug}", method = "get")]
     async fn get_conversation(
         &self,
         conversation_slug: String,
     ) -> Result<ConversationResponse, Self::ErrorWrapper<ConversationError>>;
+}
+
+#[derive(Debug, Clone)]
+pub struct RouteInfo {
+    pub route: &'static str,
+    pub method: &'static str,
+    pub sig: syn::Signature,
+}
+
+pub fn api_routes() -> Vec<RouteInfo> {
+    vec![
+        RouteInfo {
+            route: "/api/v0/chat",
+            method: "post",
+            sig: syn::parse_str(
+                "async fn start_chat(&self, body: ChatRequest) -> Result<ConversationResponse, Self::ErrorWrapper<ConversationError>>",
+            ).unwrap(),
+        },
+        RouteInfo {
+            route: "/api/v0/conversations/{conversation_slug}",
+            method: "get",
+            sig: syn::parse_str(
+                "async fn get_conversation(&self, conversation_slug: String) -> Result<ConversationResponse, Self::ErrorWrapper<ConversationError>>",
+            ).unwrap(),
+        },
+    ]
 }
 
 pub trait ClientTransport: Send + Sync {
