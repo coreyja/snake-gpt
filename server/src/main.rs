@@ -1,16 +1,24 @@
-use std::sync::{Arc, Mutex};
+#![feature(async_fn_in_trait)]
+
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 use axum::{
     body::{boxed, Body},
     extract::{self, FromRef, Path, State},
     http::{self, Method, StatusCode},
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{any, get, post},
     Json, Router,
 };
 use miette::{Context, IntoDiagnostic, Result};
 use rusqlite::{params, Connection, OptionalExtension, Row};
-use shared::{ChatRequest, ConversationResponse};
+use shared::{
+    playground::{api_routes, Api, RpcCallable},
+    ChatRequest, ConversationResponse,
+};
 use snakegpt::{get_context, respond_to_with_context, setup, EmbeddingConnection};
 use tower::ServiceExt;
 use tower_http::{
@@ -18,6 +26,8 @@ use tower_http::{
     services::ServeDir,
 };
 use uuid::Uuid;
+
+pub mod rpc;
 
 #[derive(Clone, Debug)]
 pub struct AppConnection(pub Arc<Mutex<Connection>>);
@@ -77,7 +87,7 @@ async fn main() -> Result<()> {
     let cors = CorsLayer::new()
         // allow `GET` and `POST` when accessing the resource
         .allow_methods([Method::GET, Method::POST])
-        .allow_headers(vec![http::header::CONTENT_TYPE])
+        .allow_headers([http::header::CONTENT_TYPE])
         // allow requests from any origin
         .allow_origin(Any);
 
@@ -100,10 +110,84 @@ async fn main() -> Result<()> {
         app_connection: app_conn,
     };
 
+    #[axum_macros::debug_handler(state = AppState)]
+    async fn start_chat_inner(
+        State(conn): State<EmbeddingConnection>,
+        State(app): State<AppConnection>,
+        extract::Json(r): Json<ChatRequest>,
+    ) -> Response {
+        let rpc = rpc::AxumRoutable {
+            app,
+            embedding: conn,
+        };
+
+        let resp = rpc.start_chat(r).await;
+
+        match resp {
+            Ok(resp) => Json(resp).into_response(),
+            Err(err) => Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(boxed(Body::from(format!("error: {err}"))))
+                .unwrap(),
+        }
+    }
+
+    #[axum_macros::debug_handler(state = AppState)]
+    async fn get_convo_inner(
+        State(app): State<AppConnection>,
+        State(embedding): State<EmbeddingConnection>,
+        Path(convo_slug): Path<Uuid>,
+    ) -> Response {
+        let rpc = rpc::AxumRoutable { app, embedding };
+
+        let resp = rpc.get_conversation(convo_slug.to_string()).await;
+
+        match resp {
+            Ok(resp) => Json(resp).into_response(),
+            Err(err) => Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(boxed(Body::from(format!("error: {err}"))))
+                .unwrap(),
+        }
+    }
+
     // build our application with a single route
-    let app = Router::new()
-        .route("/api/v0/chat", post(start_chat))
-        .route("/api/v0/conversations/:slug", get(get_convo))
+    let mut app = Router::new();
+
+    let api_routes = api_routes();
+
+    for r in api_routes {
+        let wrapper = match r.method {
+            "get" => get,
+            "post" => post,
+            _ => panic!("Unknown method {}", r.method),
+        };
+        let route = r.route.to_string();
+        dbg!(&route);
+
+        app = app.route(
+            r.route,
+            wrapper(
+                |State(app): State<AppConnection>,
+                 State(embedding): State<EmbeddingConnection>,
+                 Path(params): Path<HashMap<String, String>>,
+                 body: Option<String>| async move {
+                    let rpc = rpc::AxumRoutable { app, embedding };
+
+                    let r = rpc.call(route, params, body).await;
+
+                    match r {
+                        Ok(x) => Ok(Json(x)),
+                        Err(e) => Err(Json(e)),
+                    }
+                },
+            ),
+        );
+    }
+
+    let app = app
+        // .route("/api/v0/chat", post(start_chat_inner))
+        // .route("/api/v0/conversations/:slug", get(get_convo_inner))
         .with_state(state)
         .fallback_service(get(|req| async move {
             match ServeDir::new("./dist").oneshot(req).await {
@@ -125,62 +209,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn start_chat(
-    State(conn): State<EmbeddingConnection>,
-    State(app): State<AppConnection>,
-    extract::Json(r): Json<ChatRequest>,
-) -> Json<ConversationResponse> {
-    let question = r.question;
-
-    let conversation_id = {
-        let app = app.0.lock().unwrap();
-        app.query_row(
-            "INSERT OR IGNORE INTO conversations (slug, question) VALUES (?, ?) returning rowid",
-            params![r.conversation_slug.to_string(), question],
-            |row: &Row| -> Result<i64, _> { row.get(0) },
-        )
-        .unwrap()
-    };
-
-    let convo_resp = convo_resp_from_slug(&app, r.conversation_slug).unwrap();
-
-    let conversation_id = conversation_id;
-    tokio::spawn(async move {
-        let (context, question) = get_context(question.clone(), conn.clone()).await.unwrap();
-        {
-            let app = app.0.lock().unwrap();
-            app.execute(
-                "UPDATE conversations SET context = ? WHERE rowid = ?",
-                params![context, conversation_id],
-            )
-            .unwrap();
-        }
-
-        // Create a new conversation in the DB with the question
-        let resp = respond_to_with_context(context, question);
-        let (answer, _context) = resp.await.unwrap();
-
-        {
-            let app = app.0.lock().unwrap();
-            app.execute(
-                "UPDATE conversations SET answer = ? WHERE rowid = ?",
-                params![answer, conversation_id],
-            )
-            .unwrap();
-        }
-    });
-
-    Json(convo_resp.unwrap())
-}
-
-async fn get_convo(
-    State(app): State<AppConnection>,
-    Path(convo_slug): Path<Uuid>,
-) -> impl IntoResponse {
-    Json(convo_resp_from_slug(&app, convo_slug).unwrap())
-}
-
-fn convo_resp_from_slug(
+pub fn convo_resp_from_slug(
     app: &AppConnection,
     convo_slug: Uuid,
 ) -> Result<Option<ConversationResponse>> {

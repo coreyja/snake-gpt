@@ -1,19 +1,24 @@
+#![feature(async_fn_in_trait)]
+
 use std::sync::Arc;
 
-use gloo_net::http::Request;
-use shared::{ChatRequest, ConversationResponse};
+use shared::{playground::Api, ChatRequest};
 use uuid::Uuid;
 use yew::prelude::*;
 use yew_hooks::use_interval;
 
 const APP_URL: Option<&str> = option_env!("APP_URL");
 
+mod rpc;
+
 #[function_component]
 fn App() -> Html {
-    let app_url = APP_URL.unwrap_or("http://localhost:3000");
+    let app_url = APP_URL.unwrap_or("http://localhost:3000").to_string();
+    let api_url = format!("{}/api", app_url);
 
-    let chat_api_url = format!("{app_url}/api/v0/chat");
-    let chat_api_url = Arc::new(chat_api_url);
+    let client = rpc::Client::new(Some(api_url));
+    let client = Arc::new(client);
+
     let textarea_ref = use_node_ref();
 
     let question: UseStateHandle<Option<String>> = use_state(|| None);
@@ -40,38 +45,33 @@ fn App() -> Html {
             e.prevent_default();
         }
     };
+
     {
         let answer = answer.clone();
         let context = context.clone();
         let question = question.clone();
         let conversation_slug = conversation_slug.clone();
+        let client = client.clone();
         use_interval(
             move || {
                 let conversation_slug = conversation_slug.clone();
                 let answer = answer.clone();
                 let context = context.clone();
                 let question = question.clone();
+                let client = client.clone();
 
                 if question.is_none() || answer.is_some() {
                     return;
                 }
 
                 wasm_bindgen_futures::spawn_local(async move {
-                    let answer_resp: Option<ConversationResponse> = Request::get(&format!(
-                        "{app_url}/api/v0/conversations/{conversation_slug}",
-                        conversation_slug = *conversation_slug,
-                    ))
-                    .send()
-                    .await
-                    .unwrap()
-                    .json()
-                    .await
-                    .unwrap();
+                    let answer_resp = client
+                        .get_conversation(conversation_slug.to_string())
+                        .await
+                        .unwrap();
 
-                    if let Some(answer_resp) = answer_resp {
-                        answer.set(answer_resp.answer);
-                        context.set(answer_resp.context);
-                    }
+                    answer.set(answer_resp.answer);
+                    context.set(answer_resp.context);
                 });
             },
             1000,
@@ -88,6 +88,7 @@ fn App() -> Html {
             move |question| {
                 let question = question.clone();
                 let context = context.clone();
+                let client = client.clone();
 
                 wasm_bindgen_futures::spawn_local(async move {
                     let Some(q) = question.as_ref() else {
@@ -98,16 +99,7 @@ fn App() -> Html {
                         conversation_slug: *conversation_slug,
                     };
 
-                    let answer_resp: ConversationResponse = Request::post(&chat_api_url)
-                        .json(&req)
-                        .unwrap()
-                        // .body(q.to_owned())
-                        .send()
-                        .await
-                        .unwrap()
-                        .json()
-                        .await
-                        .unwrap();
+                    let answer_resp = client.start_chat(req).await.unwrap();
 
                     answer.set(answer_resp.answer);
                     context.set(answer_resp.context);
@@ -125,7 +117,7 @@ fn App() -> Html {
                     <textarea
                         ref={textarea_ref}
                         placeholder="Enter your Battlesnake Question" rows=10 cols=50
-                        class="w-1/2 shrink-0"
+                        class="w-1/2 shrink-0 bg-light-background placeholder:text-text/60"
                         onkeydown={move |e: KeyboardEvent| {
                             if e.key() == "Enter" {
                                 e.prevent_default();

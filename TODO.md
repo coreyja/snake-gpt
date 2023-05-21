@@ -2,7 +2,7 @@
 
 ## Stream April 23th TODO
 
-- [ ] Create a Conversation Model that front and backend can use
+- [x] Create a Conversation Model that front and backend can use
   - I want to be able to do more than a one-off question answer
   - The server needs to be able to respond with multiple messages for a given question
   - This should allow polling on the frontend

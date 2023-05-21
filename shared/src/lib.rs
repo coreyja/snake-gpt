@@ -1,3 +1,5 @@
+#![feature(async_fn_in_trait)]
+
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -14,3 +16,8 @@ pub struct ConversationResponse {
     pub context: Option<String>,
     pub answer: Option<String>,
 }
+
+#[derive(Deserialize, Debug, Serialize)]
+pub struct ConversationError;
+
+pub mod playground;
