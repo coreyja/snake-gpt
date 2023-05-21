@@ -162,7 +162,7 @@ async fn main() -> Result<()> {
             "post" => post,
             _ => panic!("Unknown method {}", r.method),
         };
-        dbg!(&r);
+        // dbg!(&r);
         app = app.route(
             r.route,
             wrapper(
@@ -175,7 +175,7 @@ async fn main() -> Result<()> {
                     // rpc.call(r, params).await.map_err(|e| {
                     //     eprintln!("Error: {}", e);
                     //     e
-                    // })
+                    // });
                     todo!("Got stuck here....")
                 },
             ),

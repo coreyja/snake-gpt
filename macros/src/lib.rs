@@ -15,6 +15,10 @@ pub fn rpc(
     rpc_inner(attr, item).into()
 }
 
+lazy_static::lazy_static! {
+    static ref ROUTE_REGEX: Regex = Regex::new(r":([[:word:]]*)").unwrap();
+}
+
 fn rpc_inner(
     attr: proc_macro2::TokenStream,
     item: proc_macro2::TokenStream,
@@ -61,11 +65,7 @@ fn rpc_inner(
             })
             .collect::<Vec<_>>();
 
-        lazy_static::lazy_static! {
-            static ref RE: Regex = Regex::new(r"\{([[^\[\]]&&[[:word:]]]*)\}").unwrap();
-        }
-
-        let route_attrs = RE
+        let route_attrs = ROUTE_REGEX
             .captures_iter(&route)
             .map(|x| x.get(1).unwrap().as_str())
             .collect::<Vec<_>>();
@@ -90,6 +90,7 @@ fn rpc_inner(
 
             quote::quote! { vars.insert(#x.to_string(), #ident); }
         });
+        let rustfmt_style_route = ROUTE_REGEX.replace_all(&route, "{$1}");
 
         function_copy.default = Some(
             parse2(quote::quote! { {
@@ -99,7 +100,8 @@ fn rpc_inner(
                 let mut vars = std::collections::HashMap::<String, String>::new();
                 #(#route_hash_inserts)*
                 let vars = vars;
-                let route = strfmt::strfmt(&route, &vars).unwrap();
+
+                let route = strfmt::strfmt(#rustfmt_style_route, &vars).unwrap();
 
                 #body_block
                 let resp = self

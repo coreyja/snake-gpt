@@ -12,7 +12,7 @@ pub trait Api {
         body: ChatRequest,
     ) -> Result<ConversationResponse, Self::ErrorWrapper<ConversationError>>;
 
-    #[rpc(route = "/v0/conversations/{conversation_slug}", method = "get")]
+    #[rpc(route = "/v0/conversations/:conversation_slug", method = "get")]
     async fn get_conversation(
         &self,
         conversation_slug: String,
