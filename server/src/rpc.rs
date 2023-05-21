@@ -1,4 +1,7 @@
+use std::collections::HashMap;
+
 use rusqlite::{params, Row};
+use serde::Serialize;
 use shared::{
     playground::{Api, ServerError},
     ChatRequest, ConversationError, ConversationResponse,
@@ -13,7 +16,7 @@ pub struct AxumRoutable {
 }
 
 impl Api for AxumRoutable {
-    type ErrorWrapper<InnerError: std::fmt::Debug + for<'a> serde::Deserialize<'a>> =
+    type ErrorWrapper<InnerError: std::fmt::Debug + for<'a> serde::Deserialize<'a> + Serialize> =
         ServerError<InnerError>;
 
     async fn start_chat(

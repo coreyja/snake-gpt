@@ -16,7 +16,7 @@ use axum::{
 use miette::{Context, IntoDiagnostic, Result};
 use rusqlite::{params, Connection, OptionalExtension, Row};
 use shared::{
-    playground::{api_routes, Api},
+    playground::{api_routes, Api, RpcCallable},
     ChatRequest, ConversationResponse,
 };
 use snakegpt::{get_context, respond_to_with_context, setup, EmbeddingConnection};
@@ -162,21 +162,24 @@ async fn main() -> Result<()> {
             "post" => post,
             _ => panic!("Unknown method {}", r.method),
         };
-        // dbg!(&r);
+        let route = r.route.to_string();
+        dbg!(&route);
+
         app = app.route(
             r.route,
             wrapper(
                 |State(app): State<AppConnection>,
                  State(embedding): State<EmbeddingConnection>,
                  Path(params): Path<HashMap<String, String>>,
-                 uri: axum::http::Uri| async move {
+                 body: Option<String>| async move {
                     let rpc = rpc::AxumRoutable { app, embedding };
 
-                    // rpc.call(r, params).await.map_err(|e| {
-                    //     eprintln!("Error: {}", e);
-                    //     e
-                    // });
-                    todo!("Got stuck here....")
+                    let r = rpc.call(route, params, body).await;
+
+                    match r {
+                        Ok(x) => Ok(Json(x)),
+                        Err(e) => Err(Json(e)),
+                    }
                 },
             ),
         );

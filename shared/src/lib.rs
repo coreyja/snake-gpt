@@ -17,7 +17,7 @@ pub struct ConversationResponse {
     pub answer: Option<String>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Serialize)]
 pub struct ConversationError;
 
 pub mod playground;

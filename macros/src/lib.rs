@@ -141,7 +141,7 @@ fn rpc_inner(
         where
             Transport: ClientTransport,
         {
-            type ErrorWrapper<InnerError: Debug + for<'a> Deserialize<'a>> =
+            type ErrorWrapper<InnerError: Debug + for<'a> Deserialize<'a> + Serialize> =
                 ClientError<InnerError, Transport::Error>;
 
             #(#new_impls)*
