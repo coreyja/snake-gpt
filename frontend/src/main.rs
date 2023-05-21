@@ -117,7 +117,7 @@ fn App() -> Html {
                     <textarea
                         ref={textarea_ref}
                         placeholder="Enter your Battlesnake Question" rows=10 cols=50
-                        class="w-1/2 shrink-0"
+                        class="w-1/2 shrink-0 bg-light-background placeholder:text-text/60"
                         onkeydown={move |e: KeyboardEvent| {
                             if e.key() == "Enter" {
                                 e.prevent_default();
